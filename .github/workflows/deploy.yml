@@ -43,11 +43,10 @@ jobs:
           gulp dist --codelabs-dir=codelabs  # 运行打包命令
 
       # Step 5: Upload dist folder
-      - name: Upload static files as artifact
-        id: deployment
-        uses: actions/upload-pages-artifact@v3 # or specific "vX.X.X" version tag for this action
+      - name: Upload dist directory as artifact
+        uses: actions/upload-pages-artifact@v1
         with:
-          path: dist/
+          path: ./dist  # 上传 dist 目录中的内容
 
   # Deployment job
   deploy:
