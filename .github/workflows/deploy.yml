@@ -28,7 +28,7 @@ jobs:
       # Step 4: Build the project
       - name: Build project
         run: |
-          gulp serve:dist --codelabs-dir=codelabs  # 运行打包命令
+          gulp dist --codelabs-dir=codelabs  # 运行打包命令
 
       # Step 5 (Alternative for GitHub Pages):
       - name: Deploy to GitHub Pages
