@@ -1,0 +1,47 @@
+name: Deploy Website
+
+on:
+  push:
+    branches:
+      - main  # 监听 main 分支的 push 事件
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        
+      # Step 2: Set up Node.js 12 environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '12'  # 设置 Node.js 版本为 12
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          npm install  # 安装项目依赖
+
+      # Step 4: Build the project
+      - name: Build project
+        run: |
+          gulp serve:dist --codelabs-dir=codelabs  # 运行打包命令
+
+      # Step 5: Deploy the dist folder (你可以修改这部分代码来适应你的部署目标)
+      - name: Deploy to server or hosting service
+        run: |
+          # 例如使用 rsync 上传到服务器
+          rsync -avz ./dist/ user@yourserver:/path/to/deploy/folder
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}  # 使用 GitHub Secrets 存储 SSH 密钥
+
+      # 如果使用 GitHub Pages 发布，可以用以下方式
+      # Step 5 (Alternative for GitHub Pages):
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+         github_token: ${{ secrets.GITHUB_TOKEN }}
+         publish_dir: ./dist
