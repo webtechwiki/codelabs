@@ -1,7 +1,7 @@
 summary: 如何编写 Codelab
 id: how-to-write-a-codelab
-categories: vslive
-tags: vslive
+categories: codelab
+tags: codelab
 status: Published
 authors: panhy
 

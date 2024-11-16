@@ -1,0 +1,10 @@
+{
+  "title": "Codelab",
+  "description": "与Codelab相关的介绍与帮助",
+  "logoUrl": "/codelab/codelab-logo.png",
+  "tags": ["codelab"],
+  "exclude": [
+    ".*-about$",
+    "^lang-.*"
+  ]
+}

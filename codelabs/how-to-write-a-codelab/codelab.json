@@ -3,7 +3,7 @@
   "format": "html",
   "prefix": "https://storage.googleapis.com",
   "mainga": "UA-49880327-14",
-  "updated": "2024-11-16T20:20:41+08:00",
+  "updated": "2024-11-16T22:34:13+08:00",
   "id": "how-to-write-a-codelab",
   "duration": 8,
   "title": "如何编写 Codelab",
@@ -15,10 +15,10 @@
     "published"
   ],
   "category": [
-    "vslive"
+    "codelab"
   ],
   "tags": [
-    "vslive"
+    "codelab"
   ],
   "url": "how-to-write-a-codelab"
 }
