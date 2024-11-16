@@ -3,22 +3,22 @@
   "format": "html",
   "prefix": "https://storage.googleapis.com",
   "mainga": "UA-49880327-14",
-  "updated": "2024-11-07T00:18:04+08:00",
+  "updated": "2024-11-16T20:20:41+08:00",
   "id": "how-to-write-a-codelab",
-  "duration": 7,
-  "title": "How to Write a Codelab",
-  "authors": "Zarin",
-  "summary": "How to Write a Codelab",
+  "duration": 8,
+  "title": "如何编写 Codelab",
+  "authors": "panhy",
+  "summary": "如何编写 Codelab",
   "source": "how-to-write-a-codelab.md",
   "theme": "",
   "status": [
     "published"
   ],
   "category": [
-    "sample"
+    "vslive"
   ],
   "tags": [
-    "medium"
+    "vslive"
   ],
   "url": "how-to-write-a-codelab"
 }

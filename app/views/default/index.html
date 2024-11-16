@@ -144,8 +144,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         <div id="sortby">
           <paper-tabs selected="0" noink on-iron-activate="sortBy">
             <paper-tab>A-Z</paper-tab>
-            <paper-tab>Recent</paper-tab>
-            <paper-tab>Duration</paper-tab>
+            <paper-tab>最近</paper-tab>
+            <paper-tab>时常</paper-tab>
           </paper-tabs>
         </div>
 
@@ -216,7 +216,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               {%- endif -%}
               <div class="description">{{codelab.title}}</div>
               <div class="card-duration">
-                <span>{%- if codelab.duration -%}{{codelab.duration}} min {%- endif -%}</span>
+                <span>{%- if codelab.duration -%}{{codelab.duration}} 分钟 {%- endif -%}</span>
                 <span>{%- if codelab.updated -%}Updated {{codePrettyDate(codelab.updated)}}{%- endif -%}</span>
               </div>
               <div class="card-footer">
@@ -238,25 +238,25 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         <div class="link-list">
           <label>Connect</label>
           <ul>
-            <li><a href="https://www.example.com/">Example</a></li>
+            <li><a href="https://space.bilibili.com/172353353" target="_blank">Bilibili</a></li>
           </ul>
         </div>
         <div class="link-list">
           <label>Programs</label>
           <ul>
-            <li><a href="https://www.example.com/">Example</a></li>
+            <li><a href="https://github.com/webtechwiki" target="_blank">Github</a></li>
           </ul>
         </div>
-        <div class="link-list">
+        <!-- <div class="link-list">
           <label>Developer Consoles</label>
           <ul>
             <li><a href="https://www.example.com/">Example</a></li>
           </ul>
-        </div>
+        </div> -->
         <div class="link-list">
           <label>Explore</label>
            <ul>
-            <li><a href="https://www.example.com/">Example</a></li>
+            <li><a href="https://webcoding.tech" target="_blank">webcoding.tech</a></li>
           </ul>
         </div>
       </div>
@@ -265,9 +265,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <div class="footerbar">
       <div class="site-width layout horizontal center justified">
         <span>
-          <a href="https://example.com">Terms</a>
+          <a href="https://codelabs.webtech.wiki">@Webtechwiki Codelabs</a>
           &nbsp; | &nbsp;
-          <a href="https://example.com">Privacy</a>
+          2024
         </span>
       </div>
     </div>

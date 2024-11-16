@@ -1,46 +1,47 @@
-summary: How to Write a Codelab
+summary: 如何编写 Codelab
 id: how-to-write-a-codelab
-categories: Sample
-tags: medium
+categories: vslive
+tags: vslive
 status: Published
-authors: Zarin
-Feedback Link: <https://zarin.io>
+authors: panhy
 
-# How to Write a Codelab
+# 如何编写 Codelab
 
-## Overview
+## 概述  
 
 Duration: 1
 
-### What You’ll Learn
+### 你将学到什么  
 
-- how to set the amount of time each slide will take to finish
-- how to include code snippets
-- how to hyperlink items
-- how to include images
-- other stuff
+- 如何设置每个幻灯片所需的时间  
+- 如何包含代码片段  
+- 如何超链接项目  
+- 如何插入图片  
+- 其他技巧  
 
-<!-- ------------------------ -->
-## Setting Duration
+---
+
+## 设置时长  
 
 Duration: 2
 
-To indicate how long each slide will take to go through, set the `Duration` under each Heading 2 (i.e. `##`) to an integer.
-The integers refer to minutes. If you set `Duration: 4` then a particular slide will take 4 minutes to complete.
+要指示浏览每张幻灯片所需的时间，请在每个二级标题（即 `##`）下设置 `Duration` 为一个整数。  
+这个整数代表分钟数。例如，设置 `Duration: 4` 表示完成这一张幻灯片需要 4 分钟。  
 
-The total time will automatically be calculated for you and will be displayed on the codelab once you create it.
+总时间将会自动计算，并在你创建 Codelab 后显示出来。  
 
-<!-- ------------------------ -->
-## Code Snippets
+---
+
+## 代码片段  
 
 Duration: 3
 
-To include code snippets you can do a few things.
+要包含代码片段，你可以采用以下方法：  
 
-- Inline highlighting can be done using the tiny tick mark on your keyboard: "`"
-- Embedded code
+- **内联高亮**：使用键盘上的反引号（`` ` ``）来实现。  
+- **嵌入代码**：使用代码块显示完整代码。  
 
-### JavaScript
+### JavaScript 示例  
 
 ```javascript
 { 
@@ -50,27 +51,32 @@ To include code snippets you can do a few things.
 }
 ```
 
-### Java
+### Java 示例  
 
 ```java
 for (statement 1; statement 2; statement 3) {
-  // code block to be executed
+  // 要执行的代码块
 }
 ```
 
-<!-- ------------------------ -->
-## Hyperlinking and Embedded Images
+---
 
-Duration: 1### Hyperlinking
-[Youtube - Halsey Playlists](https://www.youtube.com/user/iamhalsey/playlists)
-
-### Images
-
-![alt-text-here](assets/puppy.jpg)
-
-<!-- ------------------------ -->
-## Other Stuff
+## 超链接和嵌入图片  
 
 Duration: 1
 
-Checkout the official documentation here: [Codelab Formatting Guide](https://github.com/googlecodelabs/tools/blob/master/FORMAT-GUIDE.md)
+### 超链接  
+
+[YouTube - Halsey 播放列表](https://www.youtube.com/user/iamhalsey/playlists)  
+
+### 图片  
+
+![图片替代文本](assets/puppy.jpg)  
+
+---
+
+## 其他技巧  
+
+Duration: 1
+
+查看官方文档：[Codelab 格式指南](https://github.com/googlecodelabs/tools/blob/master/FORMAT-GUIDE.md)  
