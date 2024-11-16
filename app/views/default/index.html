@@ -99,7 +99,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <div id="mainToolbar" class="paper-header">
       <div class="site-width layout horizontal">
         <a href="/">
-          <img src="/images/logo.png" class="logo-devs" alt="Codelabs Logo">
+          <img src="/images/logo.svg" class="logo-devs" alt="Codelabs Logo">
         </a>
         <div id="searchbar">
           <paper-input-container no-label-float>
@@ -116,16 +116,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <header id="banner" {% if view.id != 'default' -%}down{%- else %}down$="[[_toBoolean(selectedFilter)]]"{%- endif %}>
       <div class="site-width">
         {% if view.id == 'default' %}
-        <h2 class="banner-title">Welcome to Codelabs!</h2>
+        <h2 class="banner-title">欢迎来到Codelabs!</h2>
         <div class="banner-description"
              data-filter-selected$="{% raw %}[[_toBoolean(selectedFilter)]]{% endraw %}">
           <p class="banner-info">
-            Codelabs provide a guided, tutorial, hands-on
-            coding experience. Most codelabs will step you through the process
-            of building a small application, or adding a new feature to an
-            existing application.
+            Codelabs 提供了一种引导式、教程式的动手编码体验。
+            大多数 Codelabs 会一步步引导你完成构建一个小型应用程序，或者为现有应用程序添加一个新功能的过程。
             <br>
-            <a href="https://github.com/googlecodelabs/tools">Codelab tools on GitHub</a>
+            <a href="https://github.com/webtechwiki/codelabs" target="_blank">在GitHub中查看本站源代码</a>
           </p>
         {%- else -%}
           <div class="banner-description">
@@ -153,7 +151,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         {% if view.id == 'default' && views|length > 1 %}
         <paper-dropdown-menu
-          label="Choose an event"
+          label="选择一个分类"
           class="dropdown-filter"
           no-label-float
           noink no-animations
