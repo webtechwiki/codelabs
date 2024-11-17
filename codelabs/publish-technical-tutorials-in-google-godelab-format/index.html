@@ -29,13 +29,15 @@
                   feedback-link="https://github.com/webtechwiki/codelabs/issues">
     
       <google-codelab-step label="概述" duration="1">
-        <h2 is-upgraded>Codelabs是什么？</h2>
-<p>Google Developers Codelab 提供了一种引导式编码实践教程体验。大部分 Codelab 会逐步介绍开发小应用或在现有应用中新增功能的过程。其友好的交互体验，以及丰富的资源，使得 Codelab 成为学习新技能的好方法。Google Codelabs 网站可以通过 <a href="https://codelabs.developers.google.cn/?hl=zh-cn" target="_blank">https://codelabs.developers.google.cn/?hl=zh-cn</a> 网址访问。当然，因为 Google 开源了这个网站构建工具，我们也可以基于该工具搭建我们自己的 Codelabs。</p>
+        <p>Google Developers Codelab 提供了一种引导式编码实践教程体验。大部分 Codelab 会逐步介绍开发小应用或在现有应用中新增功能的过程。其友好的交互体验，以及丰富的资源，使得 Codelab 成为学习新技能的好方法。Google Codelabs 网站可以通过 <a href="https://codelabs.developers.google.cn/?hl=zh-cn" target="_blank">https://codelabs.developers.google.cn/?hl=zh-cn</a> 网址访问。</p>
+<p>当然，因为 Google 开源了这个网站构建工具，我们也可以基于该工具搭建我们自己的 Codelabs。我们要搭建的网站效果如下截图</p>
+<p class="image-container"><img alt="alt text" src="img/3f84eaa8f616f1f8.webp"></p>
+<p>本文参考自: <a href="https://medium.com/@zarinlo/publish-technical-tutorials-in-google-codelab-format-b07ef76972cd" target="_blank">https://medium.com/@zarinlo/publish-technical-tutorials-in-google-codelab-format-b07ef76972cd</a></p>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="安装基础环境" duration="0">
+      <google-codelab-step label="安装基础环境" duration="2">
         <p>需要的环境如下</p>
 <ul>
 <li><code>Golang</code>: <a href="https://golang.google.cn/" target="_blank">https://golang.google.cn/</a>，需要使用到 Golang 语言插件，因此需要安装 Golang 语言环境；</li>
@@ -54,14 +56,238 @@ export PATH=$PATH:$HOME/go/bin:$GOROOT/bin
 <pre><code language="language-bash" class="language-bash">go install github.com/googlecodelabs/tools/claat@latest
 </code></pre>
 <p>安装完成 <code>Nodejs</code> 之后，直接使用以下命令全局安装 <code>gulp-cli</code></p>
-<pre><code language="language-bash" class="language-bash">npm config set registry https://registry.npmmirror.com
+<pre><code language="language-bash" class="language-bash"># 设置阿里云镜像
+npm config set registry https://registry.npmmirror.com
+# 安装gulp-cli
+npm install -g gulp-cli
 </code></pre>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="运行 codelabs 网站" duration="0">
+      <google-codelab-step label="运行Codelabs网站" duration="2">
+        <p>Codelabs 构建工具已经开源，我们可以从 Github 下载源代码，使用如下命令拉取最想项目</p>
+<pre><code language="language-bash" class="language-bash">git clone https://github.com/googlecodelabs/tools
+</code></pre>
+<p>拉下来的是整个项目的源代码，我们只需要使用到网站基础框架代码即可，网站基础框架在 <code>site</code> 目录中，执行如下命令运行网站</p>
+<pre><code language="language-bash" class="language-bash"># 进入网站目录
+cd site
+# 安装依赖
+npm install
+# 运行网站
+gulp serve
+</code></pre>
+<p>看到如下结果表示运行成功</p>
+<p class="image-container"><img alt="alt text" src="img/c027539655f6f6f0.webp"></p>
+<p>现在网站已经运行起来了，使用浏览器打开 <code>http://127.0.0.1:8000</code>，可以看到如下页面</p>
+<p class="image-container"><img alt="alt text" src="img/a994f5e0b3688714.webp"></p>
+<p>现在网站还没有内容，我们将在下一节中添加内容。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="新增Codelab和分类" duration="3">
+        <p>先创建一个 <code>codelabs</code> 文件夹，并在该目录下创建资源目录</p>
+<pre><code language="language-bash" class="language-bash"># 创建codelabs文件夹
+mkdir codelabs
+# 进入文件夹
+cd codelabs/
+# 创建资源目录
+mkdir assets
+</code></pre>
+<p>此时，文件目录结构如下</p>
+<pre><code language="language-bash" class="language-bash">tools
+|-- site
+|--|-- codelabs
+|--|--|-- assets
+</code></pre>
+<p>我们先准备一张图片叫 <code>puppy.jpg</code> 放到 <code>assets</code> 目录中。然后在 <code>codelabs</code> 目录下，创建一个 markdown 文件，命名为 <code>how-to-write-a-codelab.md</code>，并在文件中添加如下内容</p>
+<pre><code language="language-md" class="language-md">summary: 如何编写 Codelab
+id: how-to-write-a-codelab
+categories: codelab
+tags: codelab
+status: Published
+authors: panhy
+Feedback Link: https://github.com/webtechwiki/codelabs/issues
+
+# 如何编写 Codelab
+
+## 概述  
+
+Duration: 1
+
+### 你将学到什么  
+
+- 如何设置每个幻灯片所需的时间  
+- 如何包含代码片段  
+- 如何超链接项目  
+- 如何插入图片  
+- 其他技巧  
+
+---
+
+## 设置时长  
+
+Duration: 2
+
+要指示浏览每张幻灯片所需的时间，请在每个二级标题（即 `##`）下设置 `Duration` 为一个整数。  
+这个整数代表分钟数。例如，设置 `Duration: 4` 表示完成这一张幻灯片需要 4 分钟。  
+
+总时间将会自动计算，并在你创建 Codelab 后显示出来。  
+
+---
+
+## 代码片段  
+
+Duration: 3
+
+要包含代码片段，你可以采用以下方法：  
+
+- **内联高亮**：使用键盘上的反引号（`` ` ``）来实现。  
+- **嵌入代码**：使用代码块显示完整代码。  
+
+### JavaScript 示例  
+
+```javascript
+{ 
+  key1: &#34;string&#34;, 
+  key2: integer,
+  key3: &#34;string&#34;
+}
+```
+
+### Java 示例  
+
+```java
+for (statement 1; statement 2; statement 3) {
+  // 要执行的代码块
+}
+```
+
+---
+
+## 超链接和嵌入图片  
+
+Duration: 1
+
+### 超链接  
+
+[YouTube - Halsey 播放列表](https://www.youtube.com/user/iamhalsey/playlists)  
+
+### 图片  
+
+![图片替代文本](assets/puppy.jpg)  
+
+---
+
+## 其他技巧  
+
+Duration: 1
+
+查看官方文档：[Codelab 格式指南](https://github.com/googlecodelabs/tools/blob/master/FORMAT-GUIDE.md)  
+</code></pre>
+<p>因为我们在创建文章的时候，指定了元信息中的分类为 <code>codelab</code> ，并且指定的 tag 为 <code>codelab</code>，我们必须新建 <code>codelabs</code> 分类。</p>
+<p>在 <code>site/app/views</code> 目录下新建一个 <code>codelab</code>，并在该目录下新建 <code>view.json</code> 文件，用于写入分类的基本信息</p>
+<pre><code language="language-json" class="language-json">{
+  &#34;title&#34;: &#34;Codelab&#34;,
+  &#34;description&#34;: &#34;与Codelab相关的介绍与帮助&#34;,
+  &#34;logoUrl&#34;: &#34;/codelab/codelab-logo.png&#34;,
+  &#34;tags&#34;: [&#34;codelab&#34;],
+  &#34;exclude&#34;: [
+    &#34;.*-about$&#34;,
+    &#34;^lang-.*&#34;
+  ]
+}
+</code></pre>
+<p>另外，可以我们新进分类的 css 样式，在 <code>/site/app/styles</code> 目录下有一个名为 <code>_categories.scss</code> 的文件。打开该文件并在底部添加自己的条目，因为我们新增了一个类别叫<code>codelab</code>，所以添加了以下内容：</p>
+<pre><code language="language-css" class="language-css">@include codelab-card([&#39;codelab&#39;], #FC0023, &#39;codelab.svg&#39;);
+</code></pre>
+<p>最后准备好一个 <code>codelab.svg</code> 图标，并放在 <code>/site/app/images/icons</code> 目录下，完成这些操作后，该分类系的 codelab 条目将显示 css 中配置的图标，并且按钮会按照我们配置的颜色显示。到此，我们就新建好了一个 <code>codelab</code> 文章以及一个分类。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="运行Codelabs" duration="1">
+        <p>使用 <code>claat</code> 工具来将我们编写的 markdown 导出 html 网页，如下命令</p>
+<pre><code language="language-bash" class="language-bash">## go into codelabs folder
+cd codelabs
+## export md to html
+claat export how-to-write-a-codelab.md
+</code></pre>
+<p>现在我们已经编写了第一个 codelab 并成功导出了 html 文件。在 site 目录中执行以下命令运行网站</p>
+<pre><code language="language-bash" class="language-bash"># 指定codelabs目录为codelabs网站内容目录并运行网站
+gulp serve --codelabs-dir=codelabs
+</code></pre>
+<p>成功执行之后，再次打开浏览器，我们新建的文章就出来了，可以通过这个链接访问我新建的效果 <a href="https://codelabs.webtech.wiki/codelabs/how-to-write-a-codelab/index.html#0" target="_blank">https://codelabs.webtech.wiki/codelabs/how-to-write-a-codelab/index.html#0</a></p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="发布到GithubPages" duration="3">
+        <p>完成已经步骤之后，我们可以将 site 目录添加到 github 仓库中，并设置 GithubAction 来执行自动部署，我配置好的 Action 如下</p>
+<pre><code language="language-yml" class="language-yml">name: Deploy Website
+
+on:
+  push:
+    branches:
+      - main  # 监听 main 分支的 push 事件
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: &#34;pages&#34;
+  cancel-in-progress: true
+
+jobs:
+  # Build job
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v2
         
+      # Step 2: Set up Node.js 12 environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: &#39;12&#39;  # 设置 Node.js 版本为 12
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          npm install &amp;&amp; npm install -g gulp-cli # 安装项目依赖
+
+      # Step 4: Build the project
+      - name: Build project
+        run: |
+          gulp dist --codelabs-dir=codelabs  # 运行打包命令
+
+      # Step 5: Upload dist folder
+      - name: Upload dist directory as artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: ./dist  # 上传 dist 目录中的内容
+
+  # Deployment job
+  deploy:
+    environment:
+      name: github-pages
+      url: $&#123;&#123; steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
+</code></pre>
+
 
       </google-codelab-step>
     

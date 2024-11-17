@@ -35,18 +35,18 @@ jobs:
       # Step 3: Install dependencies
       - name: Install dependencies
         run: |
-          npm install && npm install -g gulp-cli # 安装项目依赖
+          npm install && npm install -g gulp-cli
 
       # Step 4: Build the project
       - name: Build project
         run: |
-          gulp dist --codelabs-dir=codelabs  # 运行打包命令
+          gulp dist --codelabs-dir=codelabs
 
       # Step 5: Upload dist folder
       - name: Upload dist directory as artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: ./dist  # 上传 dist 目录中的内容
+          path: ./dist
 
   # Deployment job
   deploy:
