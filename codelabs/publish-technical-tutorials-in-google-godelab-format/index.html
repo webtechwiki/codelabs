@@ -1,0 +1,77 @@
+
+<!doctype html>
+
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta name="theme-color" content="#4F7DC9">
+  <meta charset="UTF-8">
+  <title>使用 Google Codelab 格式编写技术教程</title>
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Code+Pro:400|Roboto:400,300,400italic,500,700|Roboto+Mono">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/claat-public/codelab-elements.css">
+  <style>
+    .success {
+      color: #1e8e3e;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14" ga4id=""></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  codelab-ga4id=""
+                  id="publish-technical-tutorials-in-google-godelab-format"
+                  title="使用 Google Codelab 格式编写技术教程"
+                  environment="web"
+                  feedback-link="https://github.com/webtechwiki/codelabs/issues">
+    
+      <google-codelab-step label="概述" duration="1">
+        <h2 is-upgraded>Codelabs是什么？</h2>
+<p>Google Developers Codelab 提供了一种引导式编码实践教程体验。大部分 Codelab 会逐步介绍开发小应用或在现有应用中新增功能的过程。其友好的交互体验，以及丰富的资源，使得 Codelab 成为学习新技能的好方法。Google Codelabs 网站可以通过 <a href="https://codelabs.developers.google.cn/?hl=zh-cn" target="_blank">https://codelabs.developers.google.cn/?hl=zh-cn</a> 网址访问。当然，因为 Google 开源了这个网站构建工具，我们也可以基于该工具搭建我们自己的 Codelabs。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="安装基础环境" duration="0">
+        <p>需要的环境如下</p>
+<ul>
+<li><code>Golang</code>: <a href="https://golang.google.cn/" target="_blank">https://golang.google.cn/</a>，需要使用到 Golang 语言插件，因此需要安装 Golang 语言环境；</li>
+<li><code>claat</code>: <a href="https://github.com/googlecodelabs/tools/tree/main/claat#install" target="_blank">https://github.com/googlecodelabs/tools/tree/main/claat#install</a>，这是由 Google 维护的开源 Golang 命令行工具；</li>
+<li><code>Nodejs</code>: <a href="https://nodejs.org" target="_blank">https://nodejs.org</a>，在编写文章的这个时间节点，虽然 <code>nodejs</code> 更新到了20，但推荐使用12，可以使用 <code>nvm</code> 或者 <code>fnm</code> 来管理你的本地 nodejs 版本；</li>
+<li><code>gulp-cli</code>: 用于运行 <code>codelabs</code> 项目的 cli 工具。</li>
+</ul>
+<p>将 Golang 语言二进制安装包解压到 <code>/usr/local/go</code> 目录，并且在用户目录下的 <code>.bash_profie</code>（或者 <code>.zsh_profile</code>） 添加以下内容</p>
+<pre><code language="language-bash" class="language-bash">## 指定go语言的安装路径和go语言的项目路径
+export GOROOT=/usr/local/go
+export GOPATH=$HOME/go
+## 将go语言二进制可执行文件设置到PATH环境变量
+export PATH=$PATH:$HOME/go/bin:$GOROOT/bin
+</code></pre>
+<p>安装好 <code>Golang</code> 之后，使用以下命令安装 <code>Claat</code></p>
+<pre><code language="language-bash" class="language-bash">go install github.com/googlecodelabs/tools/claat@latest
+</code></pre>
+<p>安装完成 <code>Nodejs</code> 之后，直接使用以下命令全局安装 <code>gulp-cli</code></p>
+<pre><code language="language-bash" class="language-bash">npm config set registry https://registry.npmmirror.com
+</code></pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="运行 codelabs 网站" duration="0">
+        
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+  <script src="//support.google.com/inapp/api.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-49880327-14",
+  "updated": "2024-11-17T13:33:48+08:00",
+  "id": "publish-technical-tutorials-in-google-godelab-format",
+  "duration": 1,
+  "title": "使用 Google Codelab 格式编写技术教程",
+  "authors": "panhy",
+  "summary": "使用 Google Codelab 编写技术教程",
+  "source": "publish-technical-tutorials-in-google-godelab-format.md",
+  "theme": "",
+  "status": [
+    "published"
+  ],
+  "category": [
+    "codelab"
+  ],
+  "tags": [
+    "codelab"
+  ],
+  "feedback": "https://github.com/webtechwiki/codelabs/issues",
+  "url": "publish-technical-tutorials-in-google-godelab-format"
+}
