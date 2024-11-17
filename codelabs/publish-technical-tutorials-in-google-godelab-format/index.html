@@ -32,7 +32,7 @@
         <p>Google Developers Codelab 提供了一种引导式编码实践教程体验。大部分 Codelab 会逐步介绍开发小应用或在现有应用中新增功能的过程。其友好的交互体验，以及丰富的资源，使得 Codelab 成为学习新技能的好方法。Google Codelabs 网站可以通过 <a href="https://codelabs.developers.google.cn/?hl=zh-cn" target="_blank">https://codelabs.developers.google.cn/?hl=zh-cn</a> 网址访问。</p>
 <p>当然，因为 Google 开源了这个网站构建工具，我们也可以基于该工具搭建我们自己的 Codelabs。我们要搭建的网站效果如下截图</p>
 <p class="image-container"><img alt="alt text" src="img/3f84eaa8f616f1f8.webp"></p>
-<p>本文参考自: <a href="https://medium.com/@zarinlo/publish-technical-tutorials-in-google-codelab-format-b07ef76972cd" target="_blank">https://medium.com/@zarinlo/publish-technical-tutorials-in-google-codelab-format-b07ef76972cd</a></p>
+<p>本文参考自: <a href="https://medium.com/@zarinlo/publish-technical-tutorials-in-google-codelab-format-b07ef76972cd" target="_blank">https://medium.com/@zarinlo/publish-technical-tutorials-in-google-codelab-format-b07ef76972cd</a>，并使用该作者的素材，加以优化。</p>
 
 
       </google-codelab-step>
@@ -218,7 +218,8 @@ claat export how-to-write-a-codelab.md
 <pre><code language="language-bash" class="language-bash"># 指定codelabs目录为codelabs网站内容目录并运行网站
 gulp serve --codelabs-dir=codelabs
 </code></pre>
-<p>成功执行之后，再次打开浏览器，我们新建的文章就出来了，可以通过这个链接访问我新建的效果 <a href="https://codelabs.webtech.wiki/codelabs/how-to-write-a-codelab/index.html#0" target="_blank">https://codelabs.webtech.wiki/codelabs/how-to-write-a-codelab/index.html#0</a></p>
+<p>成功执行之后，再次打开浏览器，我们新建的文章就显示在 Codelabs 主页里了，并且也在对应的 <code>codelab</code> 分类中。效果如下图：</p>
+<p class="image-container"><img alt="alt text" src="img/a2207184ab03afeb.webp"></p>
 
 
       </google-codelab-step>
@@ -257,23 +258,23 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
-          node-version: &#39;12&#39;  # 设置 Node.js 版本为 12
+          node-version: &#39;12&#39;
 
       # Step 3: Install dependencies
       - name: Install dependencies
         run: |
-          npm install &amp;&amp; npm install -g gulp-cli # 安装项目依赖
+          npm install &amp;&amp; npm install -g gulp-cli
 
       # Step 4: Build the project
       - name: Build project
         run: |
-          gulp dist --codelabs-dir=codelabs  # 运行打包命令
+          gulp dist --codelabs-dir=codelabs
 
       # Step 5: Upload dist folder
       - name: Upload dist directory as artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: ./dist  # 上传 dist 目录中的内容
+          path: ./dist
 
   # Deployment job
   deploy:
