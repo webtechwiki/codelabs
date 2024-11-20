@@ -1,0 +1,10 @@
+{
+  "title": "服务器",
+  "description": "假设你有一个服务器，你可以拿来做什么？",
+  "logoUrl": "/server/server.png",
+  "tags": ["服务器"],
+  "exclude": [
+    ".*-about$",
+    "^lang-.*"
+  ]
+}
