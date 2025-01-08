@@ -1,0 +1,197 @@
+
+<!doctype html>
+
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta name="theme-color" content="#4F7DC9">
+  <meta charset="UTF-8">
+  <title>如何快速搭建私有的 GitLab 代码管理平台</title>
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Code+Pro:400|Roboto:400,300,400italic,500,700|Roboto+Mono">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/claat-public/codelab-elements.css">
+  <style>
+    .success {
+      color: #1e8e3e;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14" ga4id=""></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  codelab-ga4id=""
+                  id="how-to-quickly-setup-private-gitlab-repository-management-platform"
+                  title="如何快速搭建私有的 GitLab 代码管理平台"
+                  environment="web"
+                  feedback-link="https://github.com/webtechwiki/codelabs/issues">
+    
+      <google-codelab-step label="介绍" duration="0">
+        <p>在本教程中，您将学习如何使用 Docker 和 Docker Compose 来搭建 GitLab 代码仓库管理平台，并配置 SSL 加密与 LDAP 认证。GitLab 是一个流行的 Git 仓库管理工具，广泛用于源代码管理与团队协作。本教程将帮助您在Linux环境中轻松搭建一个私有 GitLab 服务，并通过 LDAP 实现集中的用户认证。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="本教程的内容" duration="0">
+        <ol type="1">
+<li><strong>环境准备</strong><ul>
+<li>安装 Docker 和 Docker Compose</li>
+<li>设置 GitLab 所需的端口与文件路径</li>
+</ul>
+</li>
+<li><strong>配置 GitLab 服务</strong><ul>
+<li>使用 Docker Compose 安装 GitLab</li>
+<li>配置 SSL 加密</li>
+<li>配置 LDAP 认证</li>
+</ul>
+</li>
+<li><strong>配置 SMTP 邮件发送</strong></li>
+<li><strong>启动 GitLab 服务并访问</strong><ul>
+<li>启动 GitLab 容器</li>
+<li>登录 GitLab 并验证配置</li>
+</ul>
+</li>
+<li><strong>（可选）配置 GitLab 的 Git SSH 功能</strong></li>
+</ol>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="预备知识" duration="0">
+        <ul>
+<li>基础的 Linux 系统操作</li>
+<li>Docker 与 Docker Compose 的基础知识</li>
+<li>对 GitLab、LDAP 和 SMTP 有基本了解</li>
+</ul>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="环境准备" duration="0">
+        <p>在开始之前，您需要准备一个 Linux 服务器并安装 Docker 和 Docker Compose。可以通过以下命令进行安装：</p>
+<pre><code language="language-bash" class="language-bash"># 安装 Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo DOWNLOAD_URL=https://mirrors.ustc.edu.cn/docker-ce sh get-docker.sh
+
+# 安装 Docker Compose
+sudo curl -L &#34;https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)&#34; -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+</code></pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="配置 GitLab 服务" duration="0">
+        <p>我们将使用 Docker Compose 来启动 GitLab 服务，确保 Docker 容器能够持久存储数据和配置。</p>
+<h2 is-upgraded>1. 创建 <code>docker-compose.yml</code> 配置文件</h2>
+<p>在您的服务器上，创建一个新的目录用于存放 GitLab 的配置和数据。进入该目录并创建 <code>docker-compose.yml</code> 文件。</p>
+<pre><code language="language-bash" class="language-bash">mkdir ~/gitlab
+cd ~/gitlab
+nano docker-compose.yml
+</code></pre>
+<p>将以下内容粘贴到 <code>docker-compose.yml</code> 文件中：</p>
+<pre><code language="language-yaml" class="language-yaml">version: &#39;3&#39;
+services:
+  gitlab:
+    image: &#39;gitlab/gitlab-ce:latest&#39; # 或者是 gitlab-ce 版本
+    container_name: &#39;gitlab&#39;
+    restart: always
+    hostname: &#39;gitlab.algs.tech&#39;
+    ports:
+      - &#39;80:80&#39;
+      - &#39;443:443&#39;
+      - &#39;22:22&#39;
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url &#39;https://gitlab.algs.tech&#39;
+        nginx[&#39;ssl_certificate&#39;] = &#34;/etc/gitlab/ssl/cert.pem&#34;
+        nginx[&#39;ssl_certificate_key&#39;] = &#34;/etc/gitlab/ssl/key.pem&#34;
+        gitlab_rails[&#39;ldap_enabled&#39;] = true
+        gitlab_rails[&#39;ldap_servers&#39;] = YAML.load &lt;&lt;-EOS
+          main:
+            label: &#39;LDAP&#39;
+            host: &#39;openldap.algs.tech&#39;  # 替换为您的 LDAP 服务器地址
+            port: 389  # LDAP 端口
+            uid: &#39;uid&#39;  # LDAP 用户名属性
+            bind_dn: &#39;cn=admin,dc=webcoding,dc=tech&#39;  # LDAP 管理员 DN
+            password: &#39;abc2024XYZ&#39;  # LDAP 管理员密码
+            encryption: &#39;plain&#39;  # 如果需要加密，改为 &#39;start_tls&#39; 或 &#39;simple_tls&#39;
+            verify_certificates: true  # 如果使用 TLS 并需要跳过证书验证，设置为 false
+            active_directory: true  # 如果使用 Active Directory，设置为 true
+            allow_username_or_email_login: false  # 是否允许使用用户名或邮件登录
+            lowercase_usernames: false
+            block_auto_created_users: false
+            base: &#39;dc=webcoding,dc=tech&#39;  # LDAP 基础 DN
+            user_filter: &#39;&#39;  # 额外的用户过滤条件
+            group_base: &#39;&#39;
+            admin_group: &#39;&#39;  # 可以设置管理员组
+            sync_ssh_keys: false
+        EOS
+        # SMTP 配置
+        gitlab_rails[&#39;smtp_enable&#39;] = true
+        gitlab_rails[&#39;smtp_address&#39;] = &#34;smtphz.qiye.163.com&#34;  # SMTP 服务器地址
+        gitlab_rails[&#39;smtp_port&#39;] = 465  # SMTP 端口
+        gitlab_rails[&#39;smtp_user_name&#39;] = &#34;noreply.gitlab@aiapp.pro&#34;  # 发件邮箱
+        gitlab_rails[&#39;smtp_password&#39;] = &#34;password&#34;  # 发件邮箱密码
+        gitlab_rails[&#39;smtp_domain&#39;] = &#34;qiye.163.com&#34;  # 域名
+        gitlab_rails[&#39;smtp_authentication&#39;] = &#34;login&#34;  # 认证方式，可选&#34;plain&#34;, &#34;login&#34;, &#34;cram_md5&#34;
+        gitlab_rails[&#39;smtp_enable_starttls_auto&#39;] = false  # 启用 STARTTLS
+        gitlab_rails[&#39;smtp_tls&#39;] = true
+        gitlab_rails[&#39;smtp_openssl_verify_mode&#39;] = &#39;peer&#39;  # SSL 验证模式，可选&#34;none&#34;, &#34;peer&#34;, &#34;client_once&#34;, &#34;fail_if_no_peer_cert&#34;
+        gitlab_rails[&#39;gitlab_email_from&#39;] = &#39;noreply.gitlab@aiapp.pro&#39;
+        user[&#39;git_user_email&#39;] = &#39;noreply.gitlab@aiapp.pro&#39;
+    volumes:
+      - &#39;$GITLAB_HOME/config:/etc/gitlab&#39;
+      - &#39;$GITLAB_HOME/logs:/var/log/gitlab&#39;
+      - &#39;$GITLAB_HOME/data:/var/opt/gitlab&#39;
+      - &#39;/etc/certs/ssl/algs.tech:/etc/gitlab/ssl&#39;
+    shm_size: &#39;256m&#39;
+</code></pre>
+<h2 is-upgraded>2. 配置 SSL 证书</h2>
+<p>确保您已经拥有有效的 SSL 证书和密钥，将它们放置在 <code>/etc/certs/ssl/algs.tech/</code> 目录下，并且它们的权限设置正确。</p>
+<h2 is-upgraded>3. 启动 GitLab</h2>
+<p>在配置好 Docker Compose 文件后，您可以使用以下命令启动 GitLab 服务：</p>
+<pre><code language="language-bash" class="language-bash">docker-compose up -d
+</code></pre>
+<p>此命令会启动 GitLab 容器并在后台运行。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="访问 GitLab" duration="0">
+        <ol type="1">
+<li>打开浏览器并访问 <code>https://gitlab.algs.tech</code>。</li>
+<li>默认情况下，GitLab 会要求您设置管理员密码。</li>
+<li>使用您的管理员账号登录。</li>
+</ol>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="验证 LDAP 集成" duration="0">
+        <p>在 GitLab 登录页面，尝试使用 LDAP 用户进行登录。确保您正确配置了 LDAP 地址、端口、管理员 DN 和密码。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="配置 GitLab 的 Git SSH 功能" duration="0">
+        <p>如果需要启用 Git 通过 SSH 的方式推送和拉取代码，可以配置 GitLab 使用 SSH。您可以参考 <a href="https://docs.gitlab.com/ee/user/ssh.html" target="_blank">GitLab 官方文档</a> 了解更多配置内容。</p>
+<h2 is-upgraded>结语</h2>
+<p>恭喜！您已经成功搭建了一个内网 GitLab 代码仓库管理平台，并实现了 SSL 加密和 LDAP 集成。通过这个平台，您的团队可以更加安全、高效地进行代码管理。</p>
+<p>你可以将这个过程录制成教程视频，并将其发布到 YouTube 或比例比例平台，帮助更多的开发者和 IT 管理员搭建类似的环境。</p>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+  <script src="//support.google.com/inapp/api.js"></script>
+
+</body>
+</html>

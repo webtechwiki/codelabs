@@ -1,0 +1,25 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-49880327-14",
+  "updated": "2025-01-08T21:34:14+08:00",
+  "id": "how-to-quickly-setup-private-gitlab-repository-management-platform",
+  "duration": 0,
+  "title": "如何快速搭建私有的 GitLab 代码管理平台",
+  "authors": "panhy",
+  "summary": "怎样搭建私有的gitlab代码仓库管理系统",
+  "source": "how-to-quickly-setup-private-gitlab-repository-management-platform.md",
+  "theme": "",
+  "status": [
+    "published"
+  ],
+  "category": [
+    "server"
+  ],
+  "tags": [
+    "server"
+  ],
+  "feedback": "https://github.com/webtechwiki/codelabs/issues",
+  "url": "how-to-quickly-setup-private-gitlab-repository-management-platform"
+}
