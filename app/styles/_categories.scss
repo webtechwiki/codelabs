@@ -202,3 +202,6 @@ $color-weave-green, 'weave.svg');
   
 @include codelab-card(['codelab'],
   $color-google-blue, 'codelab.svg');
+
+@include codelab-card(['server'],
+$color-google-yellow, 'cloud-build.svg');
