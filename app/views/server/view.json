@@ -6,5 +6,8 @@
   "exclude": [
     ".*-about$",
     "^lang-.*"
-  ]
+  ],
+  "toolbarBgColor": "#ffb300",
+  "sort": "mainCategory",
+  "pins": []
 }
