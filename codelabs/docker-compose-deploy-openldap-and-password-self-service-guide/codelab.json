@@ -1,0 +1,25 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-49880327-14",
+  "updated": "2025-01-18T11:51:50+08:00",
+  "id": "docker-compose-deploy-openldap-and-password-self-service-guide",
+  "duration": 0,
+  "title": "Docker-Compose 部署 OpenLDAP 与密码自助找回服务教程",
+  "authors": "panhy",
+  "summary": "Docker-Compose 部署 OpenLDAP 与密码自助找回服务教程",
+  "source": "docker-compose-deploy-openldap-and-password-self-service-guide.md",
+  "theme": "",
+  "status": [
+    "published"
+  ],
+  "category": [
+    "server"
+  ],
+  "tags": [
+    "server"
+  ],
+  "feedback": "https://github.com/webtechwiki/codelabs/issues",
+  "url": "docker-compose-deploy-openldap-and-password-self-service-guide"
+}

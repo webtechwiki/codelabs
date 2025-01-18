@@ -236,13 +236,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <footer id="footer">
       <div class="footer-wrapper site-width">
         <div class="link-list">
-          <label>Connect</label>
+          <label>链接</label>
           <ul>
             <li><a href="https://space.bilibili.com/172353353" target="_blank">Bilibili</a></li>
           </ul>
         </div>
         <div class="link-list">
-          <label>Programs</label>
+          <label>源码</label>
           <ul>
             <li><a href="https://github.com/webtechwiki" target="_blank">Github</a></li>
           </ul>
@@ -254,9 +254,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           </ul>
         </div> -->
         <div class="link-list">
-          <label>Explore</label>
+          <label>探索</label>
            <ul>
-            <li><a href="https://webcoding.tech" target="_blank">webcoding.tech</a></li>
+            <li><a href="https://algs.tech" target="_blank">作者博客</a></li>
           </ul>
         </div>
       </div>
@@ -267,7 +267,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         <span>
           <a href="https://codelabs.webtech.wiki">@Webtechwiki Codelabs</a>
           &nbsp; | &nbsp;
-          2024
+          <span id="year">2023</span>
         </span>
       </div>
     </div>
@@ -277,6 +277,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
   <!-- build:js /scripts/main.js -->
   <script src="bower_components/url-search-params-polyfill/build/url-search-params.js"></script>
   <script src="scripts/app.js"></script>
+  <script>
+    // 更新年份
+    document.getElementById('year').innerHTML = new Date().getFullYear();
+  </script>
   <!-- endbuild-->
 </body>
 </html>
