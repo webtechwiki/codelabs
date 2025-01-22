@@ -53,7 +53,7 @@ services:
     restart: always
     image: osixia/phpldapadmin:latest
     ports:
-      - "80:80" # 暴露 phpLDAPadmin 的 HTTP 服务
+      - 8080:80 # 暴露 phpLDAPadmin 的 HTTP 服务
     environment:
       - PHPLDAPADMIN_HTTPS=false # 禁用 HTTPS（便于测试）
       - PHPLDAPADMIN_LDAP_HOSTS=openldap # 指定 OpenLDAP 服务主机名
@@ -64,13 +64,14 @@ services:
 
   ssp-app:
     image: ltbproject/self-service-password
+    hostname: ssp.algs.tech
     container_name: ssp-app
     restart: always
     volumes:
       - ./custom/ssp.conf.php:/var/www/conf/config.inc.local.php:ro # 挂载自定义配置文件
       - ./custom/images:/var/www/htdocs/images/custom:ro # 挂载自定义图片目录
     ports:
-      - 8080:80 # 暴露 SSP 服务的 HTTP 服务
+      - 80:80 # 暴露 SSP 服务的 HTTP 服务
 ```
 
 ---
@@ -85,9 +86,9 @@ services:
 
 // LDAP 相关配置
 $ldap_url = "ldap://openldap"; // OpenLDAP 容器的地址
-$ldap_binddn = "cn=admin,dc=webcoding,dc=tech"; // LDAP 管理员账号
-$ldap_bindpw = "abc2024XYZ"; // LDAP 管理员密码
-$ldap_base = "dc=webcoding,dc=tech"; // LDAP 基准 DN
+$ldap_binddn = "cn=admin,dc=algs,dc=tech"; // LDAP 管理员账号
+$ldap_bindpw = "abc2025XYZ"; // LDAP 管理员密码
+$ldap_base = "dc=algs,dc=tech"; // LDAP 基准 DN
 
 // 禁用短信功能
 $use_sms = false; // 禁用通过短信修改密码的功能
