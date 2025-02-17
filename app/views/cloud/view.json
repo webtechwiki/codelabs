@@ -1,0 +1,13 @@
+{
+  "title": "cloud",
+  "description": "进入云计算的世界",
+  "logoUrl": "/cloud/cloud.png",
+  "tags": ["cloud"],
+  "exclude": [
+    ".*-about$",
+    "^lang-.*"
+  ],
+  "toolbarBgColor": "#607d8b",
+  "sort": "mainCategory",
+  "pins": []
+}
