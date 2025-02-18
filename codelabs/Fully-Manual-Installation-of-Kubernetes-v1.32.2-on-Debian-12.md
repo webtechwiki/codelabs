@@ -65,7 +65,7 @@ EOF
 
 containerd的下载网址为<https://containerd.io/downloads/>，在撰写文章时（2025.02.15）最新版本是`v2.0.2`，安装到三台机器作为容器运行时环境，分别执行以下操作
 
-#### 步骤 1：安装 containerd
+#### 2.1.1 安装 containerd
 
 从 <https://github.com/containerd/containerd/releases> 下载 `containerd-<版本>-<操作系统>-<架构>.tar.gz` 存档，验证其 sha256sum，并将其解压到 `/usr/local` 目录下
 
@@ -105,7 +105,7 @@ systemctl daemon-reload
 systemctl enable --now containerd
 ```
 
-#### 步骤 2：安装 runc
+#### 2.1.2 安装 runc
 
 runc 是一个轻量级的容器运行时工具，负责根据 OCI（Open Container Initiative）规范创建和运行容器。containerd 依赖 runc 来实际启动和管理容器。
 
@@ -117,7 +117,7 @@ install -m 755 runc.amd64 /usr/local/sbin/runc
 
 该二进制文件是静态构建的，应该适用于任何 Linux 发行版。
 
-#### 步骤 3：安装 CNI 插件
+#### 2.1.3 安装 CNI 插件
 
 CNI（Container Network Interface）插件用于配置容器的网络，包括分配 IP 地址、设置网络接口、配置路由等。通常需要安装，除非明确不需要网络功能。
 
@@ -130,7 +130,7 @@ tar Cxzvf /opt/cni/bin cni-plugins-linux-amd64-v1.6.2.tgz
 
 这些二进制文件是静态构建的，应该适用于任何 Linux 发行版。
 
-#### 步骤 4：使用命令行工具
+#### 2.1.4 使用命令行工具
 
 `containerd` 是一个强大的容器运行时，但它本身是一个守护进程，需要通过命令行工具（CLI）来交互。不同的 CLI 工具（如 `ctr`、`nerdctl`、`crictl`）是为了满足不同用户和场景的需求而设计的。以下是它们的区别和适用场景：
 
@@ -160,7 +160,7 @@ EOF
 source /etc/profile
 ```
 
-#### 步骤 5：配置 containerd
+#### 2.1.5 配置 containerd
 
 containerd默认配置文件在 `/etc/containerd/config.toml`，通过运行以下命令生成一个默认配置文件：
 
@@ -177,6 +177,8 @@ systemctl restart containerd
 
 ### 2.2 签发SSL证书
 
+#### 2.2.1 安装证书工具
+
 `cfssl` 系列工具是 Cloudflare 提供的 PKI/TLS 工具，用于证书管理。可以在 <https://github.com/cloudflare/cfssl> 找到对应的信息，在撰写文章时版本是 `1.6.6`，我们下载对应操作系统的版本，安装到 `k8s-101` 这台主机，以 linux amd64 为例安装命令如下
 
 ```shell
@@ -191,3 +193,314 @@ chmod a+x /usr/local/bin/cfssl*
 - **cfssl**：核心工具，用于证书生成和管理。
 - **cfssl-json**：辅助工具，用于解析 JSON 输出。
 - **cfssl-certinfo**：用于查看证书详细信息。
+
+#### 2.2.2 k8s所需证书概述
+
+在Kubernetes集群中，我们需要为集群中的各个组件生成证书，以实现安全通信和身份验证。下图展示了Kubernetes所需的主要证书
+
+![k8s证书](assets/202502/k8s_pki.png)
+
+我们将在 `k8s-101` 生成的各个证书存放到 `/etc/kubernetes/pki` 里，并同步到其他主机上。
+
+#### 2.2.3 搭建CA
+
+CA是证书的签发机构，签发证书的前提是有一个签发机构，下文我们搭建自己的签发机构。
+
+使用以下命令生成CA配置
+
+```shell
+mkdir -p /etc/kubernetes/pki
+cat > /etc/kubernetes/pki/ca-config.json <<EOF
+{
+    "signing": {
+        "default": {
+            "expiry": "175200h"
+        },
+        "profiles": {
+            "www": {
+                "expiry": "175200h",
+                "usages": [
+                    "signing",
+                    "key encipherment",
+                    "server auth",
+                    "client auth"
+                ]
+            }
+        }
+    }
+}
+EOF
+```
+
+使用以下命令生成 CA 请求文件
+
+```shell
+cat > /etc/kubernetes/pki/ca-csr.json <<EOF
+{
+    "CN": "kubernetes",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "CN",
+            "L": "Guangzhou",
+            "ST": "Guangdong",
+            "O": "kubernetes",
+            "OU": "system"
+        }
+    ],
+    "ca": {
+        "expiry": "175200h"
+    }
+}
+EOF
+```
+
+证书根字段
+
+- `CN`：证书名称
+- `key`：定义证书类型，algo为加密类型，size为加密长度
+
+`names` 定义证书的通用名称，可以有多个条目
+
+- `CN`: Common Name，一般使用域名
+- `C`: Country Code，申请单位所属国家，只能是两个字母的国家码。例如，中国只能是CN。
+- `ST`: State or Province，省份名称或自治区名称
+- `L`: Locality，城市或自治州名
+- `O`: Organization name，组织名称、公司名称
+- `OU`: Organization Unit Name，组织单位名称、公司部门
+
+`ca.expiry` 代表有效时间，175200h代表20年。
+
+最后使用以下命令生成CA自签名根证书
+
+```shell
+cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+```
+
+最后一个参数指定了证书文件名，最后生成以下三个文件
+
+- `ca.csr`: 证书签名申请（Certificate Signing Request）文件
+- `ca.pem`: ca公钥证书
+- `ca-key.pem`: ca私钥证书
+
+生成的三个文件是根证书包含的内容。后续，我们给各个服务颁发证书的时候，都基于CA根证书来颁发。
+
+#### 2.2.4 签发证书
+
+- etcd
+
+定义证书信息如下
+
+```shell
+cat > /etc/kubernetes/pki/etcd-csr.json <<EOF
+{
+    "CN": "etcd",
+    "hosts": [
+        "127.0.0.1",
+        "192.168.122.101",
+        "192.168.122.102",
+        "192.168.122.103"
+    ],
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [{
+        "C": "CN",
+        "ST": "Guangdong",
+        "L": "Guangzhou",
+        "O": "kubernetes",
+        "OU": "system"
+    }]
+}
+EOF
+```
+
+支持的主机列表对应本机以及所有 etcd 节点。使用以下命令生成证书
+
+```shell
+cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www etcd-csr.json | cfssljson -bare etcd
+```
+
+- kube-apiserver
+
+k8s的其他组件跟 apiserver 要进行双向TLS（mTLS）认证，所以 apiserver 需要有自己的证书，以下定义证书申请文件
+
+```shell
+cat > /etc/kubernetes/pki/apiserver-csr.json <<EOF
+{
+    "CN": "apiserver",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "hosts": [
+        "127.0.0.1",
+        "10.96.0.1",
+        "192.168.122.101",
+        "192.168.122.102",
+        "192.168.122.103",
+        "kubernetes",
+        "kubernetes.default",
+        "kubernetes.default.svc",
+        "kubernetes.default.svc.cluster",
+        "kubernetes.default.svc.cluster.local"
+    ],
+    "names": [{
+        "C": "CN",
+        "ST": "Guangdong",
+        "L": "Guangzhou",
+        "O": "kubernetes",
+        "OU": "system"
+    }]
+}
+EOF
+```
+
+该证书后续被 kubernetes master 集群使用，需要将 master 节点的 IP 都填上，同时还需要填写 service 网络的第一个IP（后续计划使用`10.96.0.0 255.255.0.0` 网段作为service网络，因此加上 `10.96.0.1`），后续可能加到集群里的IP也需要都填写上去。最后使用以下命令生成证书
+
+```shell
+cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www apiserver-csr.json | cfssljson -bare apiserver
+```
+
+-- kube-controller-manager
+
+controller-manager需要跟apiserver进行mTLS认证，定义证书申请文件如下
+
+```shell
+cat > /etc/kubernetes/pki/controller-manager-csr.json <<EOF
+{
+  "CN": "system:kube-controller-manager",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+   "hosts": [
+     "127.0.0.1",
+     "192.168.122.101",
+     "192.168.122.102",
+     "192.168.122.103"
+    ],
+  "names": [
+    {
+      "C": "CN",
+      "ST": "Guangdong",
+      "L": "Guangzhou",
+      "O": "system:kube-controller-manager",
+      "OU": "system"
+    }
+  ]
+}
+EOF
+```
+
+hosts 列表包含所有 kube-controller-manager 节点 IP；CN 为 system:kube-controller-manager，O 为 system:kube-controller-manager，k8s里内置的ClusterRoleBindings system:kube-controller-manager 授权 kube-controller-manager所需的权限。后面组件证书都做类似操作。生成证书命令如下
+
+```shell
+cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www controller-manager-csr.json | cfssljson -bare controller-manager
+```
+
+- kube-scheduler
+
+kube-scheduler需要跟apiserver进行mTLS认证，生成证书申请文件如下
+
+```shell
+cat > /etc/kubernetes/pki/scheduler-csr.json <<EOF
+{
+  "CN": "system:kube-scheduler",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+   "hosts": [
+     "127.0.0.1",
+     "192.168.122.101",
+     "192.168.122.102",
+     "192.168.122.101"
+    ],
+  "names": [
+    {
+      "C": "CN",
+      "ST": "Guangdong",
+      "L": "Guangzhou",
+      "O": "system:kube-scheduler",
+      "OU": "system"
+    }
+  ]
+}
+EOF
+```
+
+kubernetes内置的ClusterRoleBindings system:kube-scheduler将授权kube-scheduler所需的权限。生成证书命令如下
+
+```shell
+cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www scheduler-csr.json | cfssljson -bare scheduler
+```
+
+- kube-proxy
+
+kube-proxy需要跟apiserver进行mTLS认证，生成证书申请请求文件如下
+
+```shell
+cat > /etc/kubernetes/pki/proxy-csr.json <<EOF
+{
+  "CN": "system:kube-proxy",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "CN",
+      "ST": "Guangdong",
+      "L": "Guangzhou",
+      "O": "kubernetes",
+      "OU": "system"
+    }
+  ]
+}
+EOF
+```
+生成证书
+
+```shell
+cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www proxy-csr.json | cfssljson -bare proxy
+```
+
+- 管理员admin能用的证书
+
+创建证书信息
+
+```shell
+cat > /etc/kubernetes/pki/admin-csr.json << EOF 
+{
+  "CN": "admin",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "CN",
+      "ST": "Guangzhou",
+      "L": "Guangdong",
+      "O": "system:masters",
+      "OU": "system"
+    }
+  ]
+}
+EOF
+```
+
+生成证书
+
+```shell
+cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www admin-csr.json | cfssljson -bare admin
+```
+
+#### 2.2.5 同步证书
+
+生成证书之后，将证书目录`/etc/kubernetes/pki`同步到其他主机。
