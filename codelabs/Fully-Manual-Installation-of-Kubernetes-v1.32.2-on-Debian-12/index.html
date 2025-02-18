@@ -88,7 +88,7 @@ EOF
       <google-codelab-step label="二、安装kubernetes" duration="0">
         <h2 is-upgraded>2.1 安装containerd</h2>
 <p>containerd的下载网址为<a href="https://containerd.io/downloads/" target="_blank">https://containerd.io/downloads/</a>，在撰写文章时（2025.02.15）最新版本是<code>v2.0.2</code>，安装到三台机器作为容器运行时环境，分别执行以下操作</p>
-<h3 is-upgraded>步骤 1：安装 containerd</h3>
+<h3 is-upgraded>2.1.1 安装 containerd</h3>
 <p>从 <a href="https://github.com/containerd/containerd/releases" target="_blank">https://github.com/containerd/containerd/releases</a> 下载 <code>containerd-<版本>-<操作系统>-<架构>.tar.gz</code> 存档，验证其 sha256sum，并将其解压到 <code>/usr/local</code> 目录下</p>
 <pre><code language="language-shell" class="language-shell">tar Cxzvf /usr/local containerd-2.0.2-linux-amd64.tar.gz
 mkdir -p /usr/local/lib/systemd/system/
@@ -124,20 +124,20 @@ EOF
 systemctl daemon-reload
 systemctl enable --now containerd
 </code></pre>
-<h3 is-upgraded>步骤 2：安装 runc</h3>
+<h3 is-upgraded>2.1.2 安装 runc</h3>
 <p>runc 是一个轻量级的容器运行时工具，负责根据 OCI（Open Container Initiative）规范创建和运行容器。containerd 依赖 runc 来实际启动和管理容器。</p>
 <p>从 <a href="https://github.com/opencontainers/runc/releases" target="_blank">https://github.com/opencontainers/runc/releases</a> 下载 <code>runc.<架构></code> 二进制文件，验证其 <code>sha256sum</code>，并将其安装为 <code>/usr/local/sbin/runc</code>。</p>
 <pre><code language="language-shell" class="language-shell">install -m 755 runc.amd64 /usr/local/sbin/runc
 </code></pre>
 <p>该二进制文件是静态构建的，应该适用于任何 Linux 发行版。</p>
-<h3 is-upgraded>步骤 3：安装 CNI 插件</h3>
+<h3 is-upgraded>2.1.3 安装 CNI 插件</h3>
 <p>CNI（Container Network Interface）插件用于配置容器的网络，包括分配 IP 地址、设置网络接口、配置路由等。通常需要安装，除非明确不需要网络功能。</p>
 <p>从 <a href="https://github.com/containernetworking/plugins/releases" target="_blank">https://github.com/containernetworking/plugins/releases</a> 下载 <code>cni-plugins-<操作系统>-<架构>-<版本>.tgz</code> 存档，验证其 <code>sha256sum</code>，并将其解压到 <code>/opt/cni/bin</code> 目录下：</p>
 <pre><code language="language-shell" class="language-shell">mkdir -p /opt/cni/bin
 tar Cxzvf /opt/cni/bin cni-plugins-linux-amd64-v1.6.2.tgz
 </code></pre>
 <p>这些二进制文件是静态构建的，应该适用于任何 Linux 发行版。</p>
-<h3 is-upgraded>步骤 4：使用命令行工具</h3>
+<h3 is-upgraded>2.1.4 使用命令行工具</h3>
 <p><code>containerd</code> 是一个强大的容器运行时，但它本身是一个守护进程，需要通过命令行工具（CLI）来交互。不同的 CLI 工具（如 <code>ctr</code>、<code>nerdctl</code>、<code>crictl</code>）是为了满足不同用户和场景的需求而设计的。以下是它们的区别和适用场景：</p>
 <table>
 <tr><td colspan="1" rowspan="1"><p>工具</p>
@@ -175,7 +175,7 @@ EOF
 # 让配置立即生效
 source /etc/profile
 </code></pre>
-<h3 is-upgraded>步骤 5：配置 containerd</h3>
+<h3 is-upgraded>2.1.5 配置 containerd</h3>
 <p>containerd默认配置文件在 <code>/etc/containerd/config.toml</code>，通过运行以下命令生成一个默认配置文件：</p>
 <pre><code language="language-shell" class="language-shell">mkdir -p /etc/containerd
 containerd config default &gt; /etc/containerd/config.toml
@@ -184,6 +184,7 @@ containerd config default &gt; /etc/containerd/config.toml
 <pre><code language="language-shell" class="language-shell">systemctl restart containerd
 </code></pre>
 <h2 is-upgraded>2.2 签发SSL证书</h2>
+<h3 is-upgraded>2.2.1 安装证书工具</h3>
 <p><code>cfssl</code> 系列工具是 Cloudflare 提供的 PKI/TLS 工具，用于证书管理。可以在 <a href="https://github.com/cloudflare/cfssl" target="_blank">https://github.com/cloudflare/cfssl</a> 找到对应的信息，在撰写文章时版本是 <code>1.6.6</code>，我们下载对应操作系统的版本，安装到 <code>k8s-101</code> 这台主机，以 linux amd64 为例安装命令如下</p>
 <pre><code language="language-shell" class="language-shell">wget https://github.com/cloudflare/cfssl/releases/download/v1.6.5/cfssl_1.6.5_linux_amd64 -o /usr/local/bin/cfssl
 wget https://github.com/cloudflare/cfssl/releases/download/v1.6.5/cfssljson_1.6.5_linux_amd64 -o /usr/local/bin/cfssljson
@@ -196,6 +197,266 @@ chmod a+x /usr/local/bin/cfssl*
 <li><strong>cfssl-json</strong>：辅助工具，用于解析 JSON 输出。</li>
 <li><strong>cfssl-certinfo</strong>：用于查看证书详细信息。</li>
 </ul>
+<h3 is-upgraded>2.2.2 k8s所需证书概述</h3>
+<p>在Kubernetes集群中，我们需要为集群中的各个组件生成证书，以实现安全通信和身份验证。下图展示了Kubernetes所需的主要证书</p>
+<p class="image-container"><img alt="k8s证书" src="img/e5518789521b4ac5.png"></p>
+<p>我们将在 <code>k8s-101</code> 生成的各个证书存放到 <code>/etc/kubernetes/pki</code> 里，并同步到其他主机上。</p>
+<h3 is-upgraded>2.2.3 搭建CA</h3>
+<p>CA是证书的签发机构，签发证书的前提是有一个签发机构，下文我们搭建自己的签发机构。</p>
+<p>使用以下命令生成CA配置</p>
+<pre><code language="language-shell" class="language-shell">mkdir -p /etc/kubernetes/pki
+cat &gt; /etc/kubernetes/pki/ca-config.json &lt;&lt;EOF
+{
+    &#34;signing&#34;: {
+        &#34;default&#34;: {
+            &#34;expiry&#34;: &#34;175200h&#34;
+        },
+        &#34;profiles&#34;: {
+            &#34;www&#34;: {
+                &#34;expiry&#34;: &#34;175200h&#34;,
+                &#34;usages&#34;: [
+                    &#34;signing&#34;,
+                    &#34;key encipherment&#34;,
+                    &#34;server auth&#34;,
+                    &#34;client auth&#34;
+                ]
+            }
+        }
+    }
+}
+EOF
+</code></pre>
+<p>使用以下命令生成 CA 请求文件</p>
+<pre><code language="language-shell" class="language-shell">cat &gt; /etc/kubernetes/pki/ca-csr.json &lt;&lt;EOF
+{
+    &#34;CN&#34;: &#34;kubernetes&#34;,
+    &#34;key&#34;: {
+        &#34;algo&#34;: &#34;rsa&#34;,
+        &#34;size&#34;: 2048
+    },
+    &#34;names&#34;: [
+        {
+            &#34;C&#34;: &#34;CN&#34;,
+            &#34;L&#34;: &#34;Guangzhou&#34;,
+            &#34;ST&#34;: &#34;Guangdong&#34;,
+            &#34;O&#34;: &#34;kubernetes&#34;,
+            &#34;OU&#34;: &#34;system&#34;
+        }
+    ],
+    &#34;ca&#34;: {
+        &#34;expiry&#34;: &#34;175200h&#34;
+    }
+}
+EOF
+</code></pre>
+<p>证书根字段</p>
+<ul>
+<li><code>CN</code>：证书名称</li>
+<li><code>key</code>：定义证书类型，algo为加密类型，size为加密长度</li>
+</ul>
+<p><code>names</code> 定义证书的通用名称，可以有多个条目</p>
+<ul>
+<li><code>CN</code>: Common Name，一般使用域名</li>
+<li><code>C</code>: Country Code，申请单位所属国家，只能是两个字母的国家码。例如，中国只能是CN。</li>
+<li><code>ST</code>: State or Province，省份名称或自治区名称</li>
+<li><code>L</code>: Locality，城市或自治州名</li>
+<li><code>O</code>: Organization name，组织名称、公司名称</li>
+<li><code>OU</code>: Organization Unit Name，组织单位名称、公司部门</li>
+</ul>
+<p><code>ca.expiry</code> 代表有效时间，175200h代表20年。</p>
+<p>最后使用以下命令生成CA自签名根证书</p>
+<pre><code language="language-shell" class="language-shell">cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+</code></pre>
+<p>最后一个参数指定了证书文件名，最后生成以下三个文件</p>
+<ul>
+<li><code>ca.csr</code>: 证书签名申请（Certificate Signing Request）文件</li>
+<li><code>ca.pem</code>: ca公钥证书</li>
+<li><code>ca-key.pem</code>: ca私钥证书</li>
+</ul>
+<p>生成的三个文件是根证书包含的内容。后续，我们给各个服务颁发证书的时候，都基于CA根证书来颁发。</p>
+<h3 is-upgraded>2.2.4 签发证书</h3>
+<ul>
+<li>etcd</li>
+</ul>
+<p>定义证书信息如下</p>
+<pre><code language="language-shell" class="language-shell">cat &gt; /etc/kubernetes/pki/etcd-csr.json &lt;&lt;EOF
+{
+    &#34;CN&#34;: &#34;etcd&#34;,
+    &#34;hosts&#34;: [
+        &#34;127.0.0.1&#34;,
+        &#34;192.168.122.101&#34;,
+        &#34;192.168.122.102&#34;,
+        &#34;192.168.122.103&#34;
+    ],
+    &#34;key&#34;: {
+        &#34;algo&#34;: &#34;rsa&#34;,
+        &#34;size&#34;: 2048
+    },
+    &#34;names&#34;: [{
+        &#34;C&#34;: &#34;CN&#34;,
+        &#34;ST&#34;: &#34;Guangdong&#34;,
+        &#34;L&#34;: &#34;Guangzhou&#34;,
+        &#34;O&#34;: &#34;kubernetes&#34;,
+        &#34;OU&#34;: &#34;system&#34;
+    }]
+}
+EOF
+</code></pre>
+<p>支持的主机列表对应本机以及所有 etcd 节点。使用以下命令生成证书</p>
+<pre><code language="language-shell" class="language-shell">cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www etcd-csr.json | cfssljson -bare etcd
+</code></pre>
+<ul>
+<li>kube-apiserver</li>
+</ul>
+<p>k8s的其他组件跟 apiserver 要进行双向TLS（mTLS）认证，所以 apiserver 需要有自己的证书，以下定义证书申请文件</p>
+<pre><code language="language-shell" class="language-shell">cat &gt; /etc/kubernetes/pki/apiserver-csr.json &lt;&lt;EOF
+{
+    &#34;CN&#34;: &#34;apiserver&#34;,
+    &#34;key&#34;: {
+        &#34;algo&#34;: &#34;rsa&#34;,
+        &#34;size&#34;: 2048
+    },
+    &#34;hosts&#34;: [
+        &#34;127.0.0.1&#34;,
+        &#34;10.96.0.1&#34;,
+        &#34;192.168.122.101&#34;,
+        &#34;192.168.122.102&#34;,
+        &#34;192.168.122.103&#34;,
+        &#34;kubernetes&#34;,
+        &#34;kubernetes.default&#34;,
+        &#34;kubernetes.default.svc&#34;,
+        &#34;kubernetes.default.svc.cluster&#34;,
+        &#34;kubernetes.default.svc.cluster.local&#34;
+    ],
+    &#34;names&#34;: [{
+        &#34;C&#34;: &#34;CN&#34;,
+        &#34;ST&#34;: &#34;Guangdong&#34;,
+        &#34;L&#34;: &#34;Guangzhou&#34;,
+        &#34;O&#34;: &#34;kubernetes&#34;,
+        &#34;OU&#34;: &#34;system&#34;
+    }]
+}
+EOF
+</code></pre>
+<p>该证书后续被 kubernetes master 集群使用，需要将 master 节点的 IP 都填上，同时还需要填写 service 网络的第一个IP（后续计划使用<code>10.96.0.0 255.255.0.0</code> 网段作为service网络，因此加上 <code>10.96.0.1</code>），后续可能加到集群里的IP也需要都填写上去。最后使用以下命令生成证书</p>
+<pre><code language="language-shell" class="language-shell">cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www apiserver-csr.json | cfssljson -bare apiserver
+</code></pre>
+<p>– kube-controller-manager</p>
+<p>controller-manager需要跟apiserver进行mTLS认证，定义证书申请文件如下</p>
+<pre><code language="language-shell" class="language-shell">cat &gt; /etc/kubernetes/pki/controller-manager-csr.json &lt;&lt;EOF
+{
+  &#34;CN&#34;: &#34;system:kube-controller-manager&#34;,
+  &#34;key&#34;: {
+    &#34;algo&#34;: &#34;rsa&#34;,
+    &#34;size&#34;: 2048
+  },
+   &#34;hosts&#34;: [
+     &#34;127.0.0.1&#34;,
+     &#34;192.168.122.101&#34;,
+     &#34;192.168.122.102&#34;,
+     &#34;192.168.122.103&#34;
+    ],
+  &#34;names&#34;: [
+    {
+      &#34;C&#34;: &#34;CN&#34;,
+      &#34;ST&#34;: &#34;Guangdong&#34;,
+      &#34;L&#34;: &#34;Guangzhou&#34;,
+      &#34;O&#34;: &#34;system:kube-controller-manager&#34;,
+      &#34;OU&#34;: &#34;system&#34;
+    }
+  ]
+}
+EOF
+</code></pre>
+<p>hosts 列表包含所有 kube-controller-manager 节点 IP；CN 为 system:kube-controller-manager，O 为 system:kube-controller-manager，k8s里内置的ClusterRoleBindings system:kube-controller-manager 授权 kube-controller-manager所需的权限。后面组件证书都做类似操作。生成证书命令如下</p>
+<pre><code language="language-shell" class="language-shell">cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www controller-manager-csr.json | cfssljson -bare controller-manager
+</code></pre>
+<ul>
+<li>kube-scheduler</li>
+</ul>
+<p>kube-scheduler需要跟apiserver进行mTLS认证，生成证书申请文件如下</p>
+<pre><code language="language-shell" class="language-shell">cat &gt; /etc/kubernetes/pki/scheduler-csr.json &lt;&lt;EOF
+{
+  &#34;CN&#34;: &#34;system:kube-scheduler&#34;,
+  &#34;key&#34;: {
+    &#34;algo&#34;: &#34;rsa&#34;,
+    &#34;size&#34;: 2048
+  },
+   &#34;hosts&#34;: [
+     &#34;127.0.0.1&#34;,
+     &#34;192.168.122.101&#34;,
+     &#34;192.168.122.102&#34;,
+     &#34;192.168.122.101&#34;
+    ],
+  &#34;names&#34;: [
+    {
+      &#34;C&#34;: &#34;CN&#34;,
+      &#34;ST&#34;: &#34;Guangdong&#34;,
+      &#34;L&#34;: &#34;Guangzhou&#34;,
+      &#34;O&#34;: &#34;system:kube-scheduler&#34;,
+      &#34;OU&#34;: &#34;system&#34;
+    }
+  ]
+}
+EOF
+</code></pre>
+<p>kubernetes内置的ClusterRoleBindings system:kube-scheduler将授权kube-scheduler所需的权限。生成证书命令如下</p>
+<pre><code language="language-shell" class="language-shell">cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www scheduler-csr.json | cfssljson -bare scheduler
+</code></pre>
+<ul>
+<li>kube-proxy</li>
+</ul>
+<p>kube-proxy需要跟apiserver进行mTLS认证，生成证书申请请求文件如下</p>
+<pre><code language="language-shell" class="language-shell">cat &gt; /etc/kubernetes/pki/proxy-csr.json &lt;&lt;EOF
+{
+  &#34;CN&#34;: &#34;system:kube-proxy&#34;,
+  &#34;key&#34;: {
+    &#34;algo&#34;: &#34;rsa&#34;,
+    &#34;size&#34;: 2048
+  },
+  &#34;names&#34;: [
+    {
+      &#34;C&#34;: &#34;CN&#34;,
+      &#34;ST&#34;: &#34;Guangdong&#34;,
+      &#34;L&#34;: &#34;Guangzhou&#34;,
+      &#34;O&#34;: &#34;kubernetes&#34;,
+      &#34;OU&#34;: &#34;system&#34;
+    }
+  ]
+}
+EOF
+</code></pre>
+<p>生成证书</p>
+<pre><code language="language-shell" class="language-shell">cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www proxy-csr.json | cfssljson -bare proxy
+</code></pre>
+<ul>
+<li>管理员admin能用的证书</li>
+</ul>
+<p>创建证书信息</p>
+<pre><code language="language-shell" class="language-shell">cat &gt; /etc/kubernetes/pki/admin-csr.json &lt;&lt; EOF 
+{
+  &#34;CN&#34;: &#34;admin&#34;,
+  &#34;key&#34;: {
+    &#34;algo&#34;: &#34;rsa&#34;,
+    &#34;size&#34;: 2048
+  },
+  &#34;names&#34;: [
+    {
+      &#34;C&#34;: &#34;CN&#34;,
+      &#34;ST&#34;: &#34;Guangzhou&#34;,
+      &#34;L&#34;: &#34;Guangdong&#34;,
+      &#34;O&#34;: &#34;system:masters&#34;,
+      &#34;OU&#34;: &#34;system&#34;
+    }
+  ]
+}
+EOF
+</code></pre>
+<p>生成证书</p>
+<pre><code language="language-shell" class="language-shell">cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www admin-csr.json | cfssljson -bare admin
+</code></pre>
+<h3 is-upgraded>2.2.5 同步证书</h3>
+<p>生成证书之后，将证书目录<code>/etc/kubernetes/pki</code>同步到其他主机。</p>
 
 
       </google-codelab-step>

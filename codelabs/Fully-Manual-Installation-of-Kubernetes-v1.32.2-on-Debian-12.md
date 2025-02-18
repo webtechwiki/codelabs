@@ -464,6 +464,7 @@ cat > /etc/kubernetes/pki/proxy-csr.json <<EOF
 }
 EOF
 ```
+
 生成证书
 
 ```shell
