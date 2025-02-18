@@ -24,10 +24,8 @@ Feedback Link: https://github.com/webtechwiki/codelabs/issues
 
 同时作为运维主机，一些额外的服务由该主机提供，如：签发证书、dns服务、Docker的私有仓库服务、k8s资源配置清单仓库服务、共享存储（NFS）服务等。不过这些额外服务在需要的时候再安装，现在只是这么规划
 
-- `192-debian`: etcd服务器、控制节点、Proxy的L4、L7代理、工作节点
-
-- `192-debian`: etcd服务器、控制节点、工作节点
-
+- `k8s-102`: k8s-103
+- `k8s-102`: k8s-103
 以上是在资源有限的情况下做的高可用资源分配，如果你的服务器资源充足，应当将各个服务分别部署到各个主机上，这样更加合理。
 
 ### 1.2 设置hostsname
@@ -59,13 +57,11 @@ cat >> /etc/hosts <<EOF
 EOF
 ```
 
-## 二、安装kubernetes
-
-### 2.1 安装containerd
+## 二、安装containerd
 
 containerd的下载网址为<https://containerd.io/downloads/>，在撰写文章时（2025.02.15）最新版本是`v2.0.2`，安装到三台机器作为容器运行时环境，分别执行以下操作
 
-#### 2.1.1 安装 containerd
+### 2.1 安装 containerd
 
 从 <https://github.com/containerd/containerd/releases> 下载 `containerd-<版本>-<操作系统>-<架构>.tar.gz` 存档，验证其 sha256sum，并将其解压到 `/usr/local` 目录下
 
@@ -105,7 +101,7 @@ systemctl daemon-reload
 systemctl enable --now containerd
 ```
 
-#### 2.1.2 安装 runc
+### 2.2 安装 runc
 
 runc 是一个轻量级的容器运行时工具，负责根据 OCI（Open Container Initiative）规范创建和运行容器。containerd 依赖 runc 来实际启动和管理容器。
 
@@ -117,7 +113,7 @@ install -m 755 runc.amd64 /usr/local/sbin/runc
 
 该二进制文件是静态构建的，应该适用于任何 Linux 发行版。
 
-#### 2.1.3 安装 CNI 插件
+### 2.3 安装 CNI 插件
 
 CNI（Container Network Interface）插件用于配置容器的网络，包括分配 IP 地址、设置网络接口、配置路由等。通常需要安装，除非明确不需要网络功能。
 
@@ -130,7 +126,7 @@ tar Cxzvf /opt/cni/bin cni-plugins-linux-amd64-v1.6.2.tgz
 
 这些二进制文件是静态构建的，应该适用于任何 Linux 发行版。
 
-#### 2.1.4 使用命令行工具
+### 2.4 使用命令行工具
 
 `containerd` 是一个强大的容器运行时，但它本身是一个守护进程，需要通过命令行工具（CLI）来交互。不同的 CLI 工具（如 `ctr`、`nerdctl`、`crictl`）是为了满足不同用户和场景的需求而设计的。以下是它们的区别和适用场景：
 
@@ -160,7 +156,7 @@ EOF
 source /etc/profile
 ```
 
-#### 2.1.5 配置 containerd
+### 2.5 配置 containerd
 
 containerd默认配置文件在 `/etc/containerd/config.toml`，通过运行以下命令生成一个默认配置文件：
 
@@ -175,9 +171,9 @@ containerd config default > /etc/containerd/config.toml
 systemctl restart containerd
 ```
 
-### 2.2 签发SSL证书
+## 三、签发SSL证书
 
-#### 2.2.1 安装证书工具
+### 3.1 安装证书工具
 
 `cfssl` 系列工具是 Cloudflare 提供的 PKI/TLS 工具，用于证书管理。可以在 <https://github.com/cloudflare/cfssl> 找到对应的信息，在撰写文章时版本是 `1.6.6`，我们下载对应操作系统的版本，安装到 `k8s-101` 这台主机，以 linux amd64 为例安装命令如下
 
@@ -194,7 +190,7 @@ chmod a+x /usr/local/bin/cfssl*
 - **cfssl-json**：辅助工具，用于解析 JSON 输出。
 - **cfssl-certinfo**：用于查看证书详细信息。
 
-#### 2.2.2 k8s所需证书概述
+### 3.2 k8s所需证书概述
 
 在Kubernetes集群中，我们需要为集群中的各个组件生成证书，以实现安全通信和身份验证。下图展示了Kubernetes所需的主要证书
 
@@ -202,7 +198,7 @@ chmod a+x /usr/local/bin/cfssl*
 
 我们将在 `k8s-101` 生成的各个证书存放到 `/etc/kubernetes/pki` 里，并同步到其他主机上。
 
-#### 2.2.3 搭建CA
+### 3.3 搭建CA
 
 CA是证书的签发机构，签发证书的前提是有一个签发机构，下文我们搭建自己的签发机构。
 
@@ -288,7 +284,7 @@ cfssl gencert -initca ca-csr.json | cfssljson -bare ca
 
 生成的三个文件是根证书包含的内容。后续，我们给各个服务颁发证书的时候，都基于CA根证书来颁发。
 
-#### 2.2.4 签发证书
+### 3.4 签发证书
 
 - etcd
 
@@ -502,6 +498,200 @@ EOF
 cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www admin-csr.json | cfssljson -bare admin
 ```
 
-#### 2.2.5 同步证书
+### 3.5 同步证书
 
 生成证书之后，将证书目录`/etc/kubernetes/pki`同步到其他主机。
+
+## 四、安装etcd
+
+我们将使用`k8s-101`、`k8s-102`、`k8s-103`这三台主机搭建ectd集群。在撰写此文档时（2425.02.18），etcd最新稳定版本是 `3.5.18`，可以从 <https://github.com/etcd-io/etcd/releases/> 这个链接下载对应的安装包。
+
+### 4.1 etcd启动参数
+
+常见参数说明说下
+
+|             参数              |           对应环境变量           |                                           说明                                            |
+| ----------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------- |
+| --name                        | ETCD_NAME                        | 当前etcd的唯一名称，要保证和其他节点不冲突                                                |
+| --data-dir                    | ETCD_DATA_DIR                    | 指定etcd存储数据的存储位置                                                                |
+| --listen-peer-urls            | ETCD_LISTEN_PEER_URLS            | 端对端的通信url，包含主机地址和端口号，指定当前etcd和其他节点etcd通信时的服务地址和端口。 |
+| --listen-client-urls          | ETCD_LISTEN_CLIENT_URLS          | 指定当前etcd接收客户端指令的地址和端口，在这里的客户端我们指的是k8s集群的master节点       |
+| --initial-advertise-peer-urls | ETCD_INITIAL_ADVERTISE_PEER_URLS | 指定etcd广播端口，当前etcd会将数据同步到其他节点，通过2380端口发送                        |
+| --advertise-client-urls       | ETCD_ADVERTISE_CLIENT_URLS       | 给客户端通告的端口                                                                        |
+| --initial-cluster             | ETCD_INITIAL_CLUSTER             | 定义etcd集群中所有节点的名称和IP，以及通信端口                                            |
+| --initial-cluster-token       | ETCD_INITIAL_CLUSTER_TOKEN       | 定义etcd中的token，所有节点的token必须保持一致                                            |
+| --initial-cluster-state       | ETCD_INITIAL_CLUSTER_STATE       | 定义etcd集群的状态，new代表新建集群，existing代表加入现有集群                             |
+
+### 4.2 创建数据目录
+
+先创建etcd默认的配置文件目录和数据目录
+
+```bash
+mkdir -p /var/lib/etcd/
+```
+
+安装到`/opt`目录，后续的k8s集群组件我们将都安装在此
+
+```shell
+# 解压
+tar -zxvf etcd-v3.5.4-linux-amd64.tar.gz
+# 将etc移到/opt目录，并修改etcd目录名
+mv etcd-v3.5.4-linux-amd64/ /opt/etcd-v3.5.4
+# 创建etcd软链接
+ln -s /opt/etcd-v3.5.4 /opt/etcd
+```
+
+### 4.3 创建etcd启动脚本
+
+我们先在etcd目录编写启动脚本`/opt/etcd/startup.sh`，如下
+
+```shell
+#!/bin/bash
+./etcd \
+  --name="etcd-server-101" \
+  --data-dir="/var/lib/etcd/" \
+  --listen-peer-urls="https://192.168.122.101:2380" \
+  --listen-client-urls="https://192.168.122.101:2379,http://127.0.0.1:2379" \
+  --initial-advertise-peer-urls="https://192.168.122.101:2380" \
+  --advertise-client-urls="https://192.168.122.101:2379" \
+  --initial-cluster="etcd-server-101=https://192.168.122.101:2380,etcd-server-102=https://192.168.122.102:2380,etcd-server-103=https://192.168.122.103:2380" \
+  --initial-cluster-token="etcd-cluster" \
+  --initial-cluster-state="new" \
+  --cert-file="/etc/kubernetes/pki/etcd.pem" \
+  --key-file="/etc/kubernetes/pki/etcd-key.pem" \
+  --trusted-ca-file="/etc/kubernetes/pki/ca.pem" \
+  --peer-cert-file="/etc/kubernetes/pki/etcd.pem" \
+  --peer-key-file="/etc/kubernetes/pki/etcd-key.pem" \
+  --peer-trusted-ca-file="/etc/kubernetes/pki/ca.pem" \
+  --peer-client-cert-auth \
+  --client-cert-auth
+```
+
+给启动脚本添加权限
+
+```shell
+chmod +x /opt/etcd/startup.sh
+```
+
+### 4.4 使用supervisor来启动etcd
+
+现在我们要安装supervisor，用于管理etcd服务，后续的k8s相关组件，我们都用supervisor来管理
+
+```shell
+# 安装supervisor
+apt install supervisor -y
+# 启动supervisor
+systemctl start supervisor
+# 让superivisor开机自启
+systemctl enable supervisor
+```
+
+添加etcd的supervisor进程维护脚本`/etc/supervisor/conf.d/etcd-server.conf`，添加以下内容
+
+```ini
+[program:etcd-server-101]
+directory=/opt/etcd
+command=/opt/etcd/startup.sh
+numprocs=1
+autostart=true
+autorestart=true
+startsecs=30
+startretries=3
+exitcodes=0,2
+stopsignal=QUIT
+stopwaitsecs=10
+user=root
+redirect_stderr=true
+stdout_logfile=/data/logs/supervisor/etcd.stdout.log
+stdout_logfile_maxbytes=64MB
+stdout_logfile_backups=4
+stdout_capture_maxbytes=1MB
+stdout_event_enabled=false
+```
+
+> 注意：在不同的主机上使用不同的服务名称，这样好辨别，如k8s-101使用`etcd-server-101`，如k8s-102使用`etcd-server-102`
+
+supervisor相关参数：
+
+- `program`: 程序名称
+- `directory`: 脚本目录
+- `command`: 启动的命令
+- `numprocs`: 启动的进程数
+- `autostart`: 是否开启自动启动
+- `autorestart`: 是否自动重启
+- `startsecs`: 启动之后多少时间后判定为已起来
+- `startretries`: 重启次数
+- `exitcodes`: 退出的code
+- `stopsignal`: 停止信号
+- `stopwaitsecs`: 停止等待的时间
+- `redirect_stderr`: 是否重定向标准输出
+- `stdout_logfile`: 进程标准输出内容写入文件
+- `stdout_logfile_maxbytes`: stdout_logfile文件做log滚动时，单个stdout_logfile文件的最大字节数，默认50M，设置为0则认为不做log滚动方式
+- `stdout_logfile_backups`: stdout_logfile备份文件个数，默认为10
+- `stdout_capture_maxbytes`: 当进程处于stdout capture mode模式的时候，写入capture FIFO的最大字节数限制，默认为0，此时认为stdout capture mode模式关闭
+- `stdout_event_enabled`: 如果设置为true，在进程写入标准文件是会发起PROCESS_LOG_STDOUT
+
+更新supervisod配置文件
+
+```shell
+# 创建supervisor日志目录
+mkdir -p /data/logs/supervisor/
+# 更新supervisod配置
+supervisorctl update
+```
+
+通过`supervisorctl status`查询supervisord状态，看到如下内容，代表supervisor正常运行
+
+```shell
+root@debian:/opt/etcd# supervisorctl status
+etcd-server-101                  RUNNING   pid 85297, uptime 0:04:38
+```
+
+此时，我们再使用`netstat -luntp | grep etcd`查看网络服务端口，看到如下信息代表etcd已经正常启动
+
+```shell
+root@debian:/opt/etcd# netstat -luntp | grep etcd
+tcp        0      0 192.168.122.101:2379      0.0.0.0:*               LISTEN      85298/./etcd        
+tcp        0      0 127.0.0.1:2379          0.0.0.0:*               LISTEN      85298/./etcd        
+tcp        0      0 192.168.122.101:2380      0.0.0.0:*               LISTEN      85298/./etcd
+```
+
+### 4.5 集群验证
+
+为了方便直接调用`etcdctl`命令，我们还可以创建其软连接
+
+```bash
+ln -s /opt/etcd/etcdctl /usr/local/bin/etcdctl
+```
+
+我们在任意节点使用etcdctl命令检查集群状态，需要注意的是，要确切指定证书的位置
+
+```shell
+etcdctl --cacert="/etc/kubernetes/pki/ca.pem" --cert="/etc/kubernetes/pki/etcd.pem" --key="/etc/kubernetes/pki/etcd-key.pem" --endpoints="https://192.168.122.101:2379,https://192.168.122.102:2379,https://192.168.122.103:2379" endpoint status --write-out=table
+```
+
+如果看到如下输出，代表 ectd 集群搭建成功
+
+```bash
++----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+|          ENDPOINT          |        ID        | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |
++----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+| https://192.168.122.101:2379 | c8815bb4b21730b3 |   3.5.4 |  311 kB |      true |      false |         3 |      37628 |              37628 |        |
+| https://192.168.122.102:2379 | f30299e8a0b43b4d |   3.5.4 |  311 kB |     false |      false |         3 |      37628 |              37628 |        |
+| https://192.168.122.103:2379 | 61c90f737ccf2682 |   3.5.4 |  311 kB |     false |      false |         3 |      37628 |              37628 |        |
++----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+```
+
+为了验证etcd集群是否正常工作，我们还可以现在`199-debian`设置一个值，如下
+
+```bash
+etcdctl put name lixiaoming123
+```
+
+再通过`k8s-102`和`k8s-103`去读取值，如果正常取到，代表etcd集群正常工作，如下命令
+
+```bash
+etcdctl get name
+```
+
+如果需要了解`etcdctl`这个指令的更多用法，使用`--help`参数即可查看。
