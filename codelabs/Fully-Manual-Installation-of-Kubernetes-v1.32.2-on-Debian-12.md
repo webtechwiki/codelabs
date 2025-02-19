@@ -57,6 +57,20 @@ cat >> /etc/hosts <<EOF
 EOF
 ```
 
+### 1.3 关闭交换分区
+
+ubernetes 默认不支持在启用交换分区的情况下运行，可以使用以下命令临时关闭交换分区
+
+```bash
+swapoff -a
+```
+
+如果你希望永久禁用交换分区，可以编辑 `/etc/fstab` 文件，注释掉或删除与交换分区相关的行。然后运行以下命令确保交换分区被禁用：
+
+```bash
+swapoff -a
+```
+
 ## 二、安装containerd
 
 containerd的下载网址为<https://containerd.io/downloads/>，在撰写文章时（2025.02.15）最新版本是`v2.0.2`，安装到三台机器作为容器运行时环境，分别执行以下操作
@@ -122,6 +136,42 @@ CNI（Container Network Interface）插件用于配置容器的网络，包括�
 ```shell
 mkdir -p /opt/cni/bin
 tar Cxzvf /opt/cni/bin cni-plugins-linux-amd64-v1.6.2.tgz
+```
+
+将 `/opt/cni/bin` 目录添加到 `$PATH` 中，执行以下命令追加到 `/etc/profile` 文件中
+
+```shell
+echo 'export PATH=$PATH:/opt/cni/bin' >> /etc/profile
+source /etc/profile
+```
+
+创建 CNI 配置文件目录
+
+```shell
+mkdir -p /etc/cni/net.d
+cat > /etc/cni/net.d/10-mynet.conf <<EOF
+{
+  "cniVersion": "0.4.0",
+  "name": "mynet",
+  "type": "bridge",
+  "bridge": "cni0",
+  "isGateway": true,
+  "ipMasq": true,
+  "ipam": {
+    "type": "host-local",
+    "subnet": "10.22.0.0/16",
+    "routes": [
+      { "dst": "0.0.0.0/0" }
+    ]
+  }
+}
+EOF
+```
+
+重启 containerd
+
+```shell
+systemctl restart containerd
 ```
 
 这些二进制文件是静态构建的，应该适用于任何 Linux 发行版。
@@ -1338,3 +1388,170 @@ etcd-0               Healthy   ok
 ```
 
 不过这个命令将来可能会被废弃，目前也可以使用 `kubectl cluster-info` 命令查看 Kubernetes 集群的基本信息。
+
+## 十一、安装kubelet
+
+### 11.1 创建授权配置文件
+
+为用户 `kubelet-bootstrap` 授权，允许 `kubelet tls bootstrap` 创建 `CSR` 请求，执行如下命令
+
+```bash
+kubectl create clusterrolebinding kubelet-bootstrap1 --clusterrole=system:node-bootstrapper --user=kubelet-bootstrap
+```
+
+把 `system:certificates.k8s.io:certificatesigningrequests:nodeclient` 授权给 `kubelet-bootstrap`，目的是实现对 `CSR` 的自动审批，如下命令
+
+```bash
+kubectl create clusterrolebinding kubelet-bootstrap2 --clusterrole=system:certificates.k8s.io:certificatesigningrequests:nodeclient --user=kubelet-bootstrap
+```
+
+这个用户名是在配置 `apiserver` 时用到的token文件`/etc/kubernetes/bb.csv`里指定的。最后使用以下命令创建对应授权配置文件
+
+```bash
+# 进入证书目录
+cd /etc/kubernetes/pki/
+# 创建集群信息
+kubectl config set-cluster kubernetes --certificate-authority=ca.pem --embed-certs=true --server=https://192.168.122.100:7443 --kubeconfig=kubelet-bootstrap.conf
+# 创建用户信息，注意token是上面创建的`bb.csv`里指定的token
+kubectl config set-credentials kubelet-bootstrap --token=e83b6b5f1d1dba4cf38a  --kubeconfig=kubelet-bootstrap.conf
+# 设置上下文
+kubectl config set-context kubernetes --cluster=kubernetes --user=kubelet-bootstrap --kubeconfig=kubelet-bootstrap.conf
+# 启用上下文
+kubectl config use-context kubernetes --kubeconfig=kubelet-bootstrap.conf
+# 剪切配置文件到/etc/kubernetes
+mv kubelet-bootstrap.conf  /etc/kubernetes/
+```
+
+生成配置文件`/etc/kubernetes/kubelet-bootstrap.conf`之后，传到工作节点中，在这里是`k8s-102`和`k8s-103`。
+
+### 11.2 创建kubelet配置文件
+
+创建 kubelet 用到的配置文件 `/etc/kubernetes/kubelet-config.yaml`，后续 kubelet 配置启动文件需要用到，内容如下
+
+```yaml
+apiVersion: kubelet.config.k8s.io/v1beta1
+address: 0.0.0.0
+port: 10250 
+readOnlyPort: 10255
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    cacheTTL: 0s
+    enabled: true
+  x509:
+    clientCAFile: /etc/kubernetes/pki/ca.pem
+authorization:
+  mode: Webhook
+  webhook:
+    cacheAuthorizedTTL: 0s
+    cacheUnauthorizedTTL: 0s
+cgroupDriver: systemd
+clusterDNS:
+- 10.96.0.10
+clusterDomain: cluster.local
+cpuManagerReconcilePeriod: 0s
+evictionPressureTransitionPeriod: 0s
+fileCheckFrequency: 0s
+healthzBindAddress: 127.0.0.1
+httpCheckFrequency: 0s
+imageMinimumGCAge: 0s
+kind: KubeletConfiguration
+```
+
+这里我们指定clusterDNS的IP是10.96.0.10。
+
+### 11.3 配置kubelet启动脚本
+
+#### 11.3.1 配置启动脚本
+
+接下来在`k8s-102`和`k8s-103`上启动kubelet，在让kubelet启动之前，我们需要有一个基础的pause镜像，以下是拉取命令，该镜像负责其k8s集群中pod启动之前的初始化操作
+
+```bash
+nerdctl pull registry.aliyuncs.com/google_containers/pause:3.10
+```
+
+创建kubelet的启动脚本文件`/opt/kubernetes/server/bin/kubelet.sh`文件，添加以下内容
+
+```bash
+#!/bin/bash
+./kubelet \
+    --bootstrap-kubeconfig=/etc/kubernetes/kubelet-bootstrap.conf  \
+    --cert-dir=/var/lib/kubelet/pki \
+    --hostname-override=node-102 \
+    --kubeconfig=/etc/kubernetes/kubelet.kubeconfig \
+    --config=/etc/kubernetes/kubelet-config.yaml \
+    --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.10 \
+    --container-runtime=remote \
+    --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \
+    --runtime-request-timeout=15m \
+    --v=2
+```
+
+添加可执行权限
+
+```bash
+chmod +x /opt/kubernetes/server/bin/kubelet.sh
+```
+
+创建数据目录和日志目录
+
+```bash
+# 创建kubelet所需要的日志目录
+mkdir -p /var/log/kubernetes
+```
+
+#### 11.3.2 配置管理服务
+
+创建supervisor进程配置文件`/etc/supervisor/conf.d/kube-kubelet.conf`文件，添加以下内容
+
+```ini
+[program:kube-kubelet-102]
+directory=/opt/kubernetes/server/bin
+command=/opt/kubernetes/server/bin/kubelet.sh
+numprocs=1
+autostart=true
+autorestart=true
+startsecs=30
+startretries=3
+exitcodes=0,2
+stopsignal=QUIT
+stopwaitsecs=10
+user=root
+redirect_stderr=true
+stdout_logfile=/data/logs/supervisor/kubelet.stdout.log
+stdout_logfile_maxbytes=64MB
+stdout_logfile_backups=4
+stdout_capture_maxbytes=1MB
+stdout_event_enabled=false
+```
+
+更新supervisord，如下命令
+
+```shell
+supervisorctl update
+```
+
+#### 11.3.3 验证集群
+
+此时，服务已经正常运行了，可以使用以下`kubectl`命令在查看节点信息
+
+```shell
+kubectl get nodes
+```
+
+如果看到以下信息，代表安装成功
+
+```bash
+NAME       STATUS   ROLES    AGE   VERSION
+node-102   Ready    <none>   19m   v1.32.2
+node-103   Ready    <none>   18m   v1.32.2
+```
+
+我们还可以设置集群的标签
+
+```bash
+# 设置集群为node标签
+kubectl label node node-102 node-role.kubernetes.io/node=
+kubectl label node node-103 node-role.kubernetes.io/node=
+```
