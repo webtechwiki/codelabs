@@ -515,11 +515,11 @@ EOF
 </code></pre>
 <p>安装到<code>/opt</code>目录，后续的k8s集群组件我们将都安装在此</p>
 <pre><code language="language-shell" class="language-shell"># 解压
-tar -zxvf etcd-v3.5.4-linux-amd64.tar.gz
+tar -zxvf etcd-v3.5.18-linux-amd64.tar.gz
 # 将etc移到/opt目录，并修改etcd目录名
-mv etcd-v3.5.4-linux-amd64/ /opt/etcd-v3.5.4
+mv etcd-v3.5.18-linux-amd64/ /opt/etcd-v3.5.18
 # 创建etcd软链接
-ln -s /opt/etcd-v3.5.4 /opt/etcd
+ln -s /opt/etcd-v3.5.18 /opt/etcd
 </code></pre>
 <h2 is-upgraded>4.3 创建etcd启动脚本</h2>
 <p>我们先在etcd目录编写启动脚本<code>/opt/etcd/startup.sh</code>，如下</p>
@@ -623,9 +623,9 @@ tcp        0      0 192.168.122.101:2380      0.0.0.0:*               LISTEN    
 <pre><code language="language-bash" class="language-bash">+----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
 |          ENDPOINT          |        ID        | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |
 +----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
-| https://192.168.122.101:2379 | c8815bb4b21730b3 |   3.5.4 |  311 kB |      true |      false |         3 |      37628 |              37628 |        |
-| https://192.168.122.102:2379 | f30299e8a0b43b4d |   3.5.4 |  311 kB |     false |      false |         3 |      37628 |              37628 |        |
-| https://192.168.122.103:2379 | 61c90f737ccf2682 |   3.5.4 |  311 kB |     false |      false |         3 |      37628 |              37628 |        |
+| https://192.168.122.101:2379 | c8815bb4b21730b3 |   3.5.18 |  311 kB |      true |      false |         3 |      37628 |              37628 |        |
+| https://192.168.122.102:2379 | f30299e8a0b43b4d |   3.5.18 |  311 kB |     false |      false |         3 |      37628 |              37628 |        |
+| https://192.168.122.103:2379 | 61c90f737ccf2682 |   3.5.18 |  311 kB |     false |      false |         3 |      37628 |              37628 |        |
 +----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
 </code></pre>
 <p>为了验证etcd集群是否正常工作，我们还可以现在<code>199-debian</code>设置一个值，如下</p>
@@ -635,6 +635,140 @@ tcp        0      0 192.168.122.101:2380      0.0.0.0:*               LISTEN    
 <pre><code language="language-bash" class="language-bash">etcdctl get name
 </code></pre>
 <p>如果需要了解<code>etcdctl</code>这个指令的更多用法，使用<code>--help</code>参数即可查看。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="五、将kubernetes二进制安装包解压到系统中" duration="0">
+        <p>在撰写这个文档时，kubernetes最新稳定版本为<code>v1.32.2</code>，所以这里也采用这个版本。通过 <a href="https://kubernetes.io/zh-cn/releases/" target="_blank">https://kubernetes.io/zh-cn/releases/</a> 下载最新的对应操作系统的稳定版本。</p>
+<p>我们下载好对应的 &#34;Server Binarie&#34; 之后，在所有k8s主机上执行安装，如下步骤</p>
+<pre><code language="language-shell" class="language-shell"># 解压安装包
+tar -zxvf kubernetes-server-linux-amd64.tar.gz
+# 将安装包移到/opt目录下并根据版本重命名
+mv kubernetes /opt/kubernetes-v1.32.2
+# 创建软连接
+ln -s /opt/kubernetes-v1.32.2/ /opt/kubernetes
+</code></pre>
+<p>在k8s二进制安装目录里包含了k8s源码包，还包含k8s核心组件的docker镜像，因为我们的核心服务不运行在容器里，所以可以删除掉，操作过程如下</p>
+<pre><code language="language-shell" class="language-shell"># 进入k8s目录
+cd /opt/kubernetes
+# 删除源代码
+rm kubernetes-src.tar.gz
+# 删除二进制文件目录下以tar作为名称后缀的docker镜像包
+rm -rf server/bin/*.tar
+</code></pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="六、安装apiserver" duration="0">
+        <p>搭建好etcd数据库集群之后，我们就可以安装apiserver组件了，在所有主机上安装apiserver，以下是具体的安装过程。</p>
+<h2 is-upgraded>6.1 创建kubelet授权用户</h2>
+<p>因为后面要配置kubelet的bootstrap认证，即kubelet启动时自动创建CSR请求，这里需要在apiserver上开启token的认证。所以先在master上生成一个随机值作为token。下面在一台主机操作即可</p>
+<pre><code language="language-shell" class="language-shell"># 创建证书目录
+openssl rand -hex 10
+</code></pre>
+<p>假设生成的token为<code>88c916f382dc619a6bca</code>，把这个token写入到一个文件里，这里写入到 <code>/etc/kubernetes/bb.csv</code>，如下</p>
+<pre><code language="language-bash" class="language-bash">cat &gt; /etc/kubernetes/bb.csv &lt;&lt;EOF
+88c916f382dc619a6bca,kubelet-bootstrap,10001,&#34;system:node-bootstrapper&#34;
+EOF
+</code></pre>
+<p>这里第二列定义了一个用户名kubelet-bootstrap，后面在配置kubelet时会为此用户授权。创建好该文件后，同步到其他主机。</p>
+<h2 is-upgraded>6.2 启动apiser服务</h2>
+<h3 is-upgraded>6.2.1 创建启动脚本</h3>
+<p>在apiserver二进制文件目录创建<code>/opt/kubernetes/server/bin/kube-apiserver.sh</code>启动脚本文件，写入以下内容</p>
+<pre><code language="language-bash" class="language-bash">#!/bin/bash
+./kube-apiserver \
+    --v=2 \
+    --logtostderr=true \
+    --allow-privileged=true \
+    --bind-address=&#34;192.168.122.101&#34; \
+    --secure-port=&#34;6443&#34; \
+    --token-auth-file=&#34;/etc/kubernetes/bb.csv&#34; \
+    --advertise-address=&#34;192.168.122.101&#34; \
+    --service-cluster-ip-range=&#34;10.96.0.0/16&#34; \
+    --service-node-port-range=&#34;30000-60000&#34; \
+    --etcd-servers=&#34;https://192.168.122.101:2379,https://192.168.122.102:2379,https://192.168.122.103:2379&#34; \
+    --etcd-cafile=&#34;/etc/kubernetes/pki/ca.pem&#34; \
+    --etcd-certfile=&#34;/etc/kubernetes/pki/etcd.pem&#34; \
+    --etcd-keyfile=&#34;/etc/kubernetes/pki/etcd-key.pem&#34; \
+    --client-ca-file=&#34;/etc/kubernetes/pki/ca.pem&#34; \
+    --tls-cert-file=&#34;/etc/kubernetes/pki/apiserver.pem&#34; \
+    --tls-private-key-file=&#34;/etc/kubernetes/pki/apiserver-key.pem&#34; \
+    --kubelet-client-certificate=&#34;/etc/kubernetes/pki/apiserver.pem&#34; \
+    --kubelet-client-key=&#34;/etc/kubernetes/pki/apiserver-key.pem&#34; \
+    --service-account-key-file=&#34;/etc/kubernetes/pki/ca-key.pem&#34; \
+    --service-account-signing-key-file=&#34;/etc/kubernetes/pki/ca-key.pem&#34; \
+    --service-account-issuer=&#34;https://kubernetes.default.svc.cluster.local&#34; \
+    --kubelet-preferred-address-types=&#34;InternalIP,ExternalIP,Hostname&#34; \
+    --enable-admission-plugins=&#34;NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,ResourceQuota&#34; \
+    --authorization-mode=&#34;Node,RBAC&#34; \
+    --enable-bootstrap-token-auth=true
+    #--requestheader-client-ca-file=/etc/kubernetes/pki/front-proxy-ca.pem  \
+    #--proxy-client-cert-file=/etc/kubernetes/pki/front-proxy-client.pem  \
+    #--proxy-client-key-file=/etc/kubernetes/pki/front-proxy-client-key.pem  \
+    #--requestheader-allowed-names=aggregator  \
+    #--requestheader-group-headers=X-Remote-Group  \
+    #--requestheader-extra-headers-prefix=X-Remote-Extra-  \
+    #--requestheader-username-headers=X-Remote-User
+</code></pre>
+<p>赋予执行权限</p>
+<pre><code language="language-shell" class="language-shell">chmod +x /opt/kubernetes/server/bin/kube-apiserver.sh
+</code></pre>
+<p>上面注释的部分是配置聚合层的，本环境里没有启用聚合层所以这些选项被注释了，如果配置了聚合层的话，则需要把#取消。相关参数说明</p>
+<ul>
+<li><code>--v</code>：日志输出级别</li>
+<li><code>--logtostderr</code>：将输出记录到标准日志，而不是文件，默认是true</li>
+<li><code>--allow-privileged</code>：是否使用超级管理员权限创建容器，默认为false</li>
+<li><code>--bind-address</code>：绑定的IP地址，如果没有指定地址（0.0.0.0或者::），默认是 0.0.0.0，代表所有的网卡都在监听服务</li>
+<li><code>--secure-port</code>：参数指定的端口号对应监听的IP地址</li>
+<li><code>--token-auth-file</code>：该文件用于指定api-server颁发证书的token授权</li>
+<li><code>--advertise-address</code>：向集群广播的ip地址，这个ip地址必须能被集群的其他节点访问，如果不指定，将使用–bind-address，如果不指定–bind-addres，将使用默认网卡</li>
+<li><code>--service-cluster-ip-range</code>：创建service时，使用的虚拟网段</li>
+<li><code>--service-node-port-range</code>：创建service时，服务端口使用的端口范围（默认 30000-32767）</li>
+<li><code>--etcd-cafile</code>：访问etcd时使用，ectd的ca文件</li>
+<li><code>--etcd-certfile</code>：访问etcd时使用，ectd的证书文件</li>
+<li><code>--etcd-servers</code>：各个etcd节点的IP和端口号</li>
+<li><code>--etcd-keyfile</code>：访问etcd时使用，ectd的证书私钥文件</li>
+<li><code>--client-ca-file</code>：访问apiserver时使用，客户端ca文件</li>
+<li><code>--tls-cert-file</code>：访问apiserver时使用，tls证书文件</li>
+<li><code>--tls-private-key-file</code>：访问apiserver时使用，tls证书私钥文件</li>
+<li><code>--kubelet-client-certificate</code>：访问kubelet时使用，客户端证书路径</li>
+<li><code>--kubelet-client-key</code>：访问kubelet时使用，客户端证书私钥</li>
+<li><code>--service-account-key-file</code>：包含 PEM 编码的 x509 RSA 或 ECDSA 私钥或公钥，用来检查 ServiceAccount 的令牌</li>
+<li><code>--service-account-signing-key-file</code>：指向包含当前服务账号令牌发放者的私钥的文件路径。 此发放者使用此私钥来签署所发放的 ID 令牌</li>
+<li><code>--service-account-issuer</code>：服务账户令牌发放者的身份标识</li>
+<li><code>--enable-admission-plugins</code>：允许使用的插件</li>
+<li><code>--authorization-mode</code>：授权模式</li>
+<li><code>--enable-bootstrap-token-auth</code>：是否使用token的方式来自动颁发证书，如果主机节点比较多的时候，手动颁发证书可能不太现实，可以使用基于token的方式自动颁发证书</li>
+</ul>
+<p>以上是我们在启动apiserver的时候常用的参数，apiserver具有很多参数，很多参数也有默认值，可以<code>./kube-apiserver --hep</code>命令查看更多的帮助。</p>
+<h3 is-upgraded>6.2.2 使用supervisor运行</h3>
+<p>创建supervisor配置文件<code>/etc/supervisor/conf.d/kube-apiserver.conf</code></p>
+<pre><code language="language-ini" class="language-ini">[program:kube-apiserver-160]
+directory=/opt/kubernetes/server/bin
+command=/opt/kubernetes/server/bin/kube-apiserver.sh
+numprocs=1
+autostart=true
+autorestart=true
+startsecs=30
+startretries=3
+exitcodes=0,2
+stopsignal=QUIT
+stopwaitsecs=10
+user=root
+redirect_stderr=true
+stdout_logfile=/data/logs/supervisor/apiserver.stdout.log
+stdout_logfile_maxbytes=64MB
+stdout_logfile_backups=4
+stdout_capture_maxbytes=1MB
+stdout_event_enabled=false
+</code></pre>
+<p>更新supervisor服务</p>
+<pre><code language="language-shell" class="language-shell">supervisorctl update
+</code></pre>
+<p>再使用<code>supervisorctl status</code>命令查看apiserver启动状态，如果显示如下内容，代表正常服务</p>
+<p>此时，还可以使用<code>netstat -luntp | grep kube-api</code>命令查看网络服务的端口是否正常，如果正常，将返回如下内容</p>
 
 
       </google-codelab-step>

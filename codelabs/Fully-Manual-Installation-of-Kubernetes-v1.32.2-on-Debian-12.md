@@ -696,9 +696,31 @@ etcdctl get name
 
 如果需要了解`etcdctl`这个指令的更多用法，使用`--help`参数即可查看。
 
-## 五、下载最新稳定版本kubernetes
+## 五、将kubernetes二进制安装包解压到系统中
 
 在撰写这个文档时，kubernetes最新稳定版本为`v1.32.2`，所以这里也采用这个版本。通过 <https://kubernetes.io/zh-cn/releases/> 下载最新的对应操作系统的稳定版本。
+
+我们下载好对应的 “Server Binarie” 之后，在所有k8s主机上执行安装，如下步骤
+
+```shell
+# 解压安装包
+tar -zxvf kubernetes-server-linux-amd64.tar.gz
+# 将安装包移到/opt目录下并根据版本重命名
+mv kubernetes /opt/kubernetes-v1.32.2
+# 创建软连接
+ln -s /opt/kubernetes-v1.32.2/ /opt/kubernetes
+```
+
+在k8s二进制安装目录里包含了k8s源码包，还包含k8s核心组件的docker镜像，因为我们的核心服务不运行在容器里，所以可以删除掉，操作过程如下
+
+```shell
+# 进入k8s目录
+cd /opt/kubernetes
+# 删除源代码
+rm kubernetes-src.tar.gz
+# 删除二进制文件目录下以tar作为名称后缀的docker镜像包
+rm -rf server/bin/*.tar
+```
 
 ## 六、安装apiserver
 
@@ -717,39 +739,15 @@ openssl rand -hex 10
 
 ```bash
 cat > /etc/kubernetes/bb.csv <<EOF
-6440328e1b3a1f4873dc,kubelet-bootstrap,10001,"system:node-bootstrapper"
+88c916f382dc619a6bca,kubelet-bootstrap,10001,"system:node-bootstrapper"
 EOF
 ```
 
 这里第二列定义了一个用户名kubelet-bootstrap，后面在配置kubelet时会为此用户授权。创建好该文件后，同步到其他主机。
 
-### 6.2 安装apiserver
+### 6.2 启动apiser服务
 
-在三台主机上，执行安装操作
-
-```shell
-# 解压安装包
-tar -zxvf kubernetes-server-linux-amd64.tar.gz
-# 将安装包移到/opt目录下并根据版本重命名
-mv kubernetes /opt/kubernetes-v1.24.1
-# 创建软连接
-ln -s /opt/kubernetes-v1.24.1/ /opt/kubernetes
-```
-
-在k8s二进制安装目录里包含了k8s源码包，还包含k8s核心组件的docker镜像，因为我们的核心服务不运行在容器里，所以可以删除掉，操作过程如下
-
-```shell
-# 进入k8s目录
-cd /opt/kubernetes
-# 删除源代码
-rm kubernetes-src.tar.gz
-# 删除二进制文件目录下以tar作为名称后缀的docker镜像包
-rm -rf server/bin/*.tar
-```
-
-### 6.3 启动apiser服务
-
-#### 6.3.1 创建启动脚本
+#### 6.2.1 创建启动脚本
 
 在apiserver二进制文件目录创建`/opt/kubernetes/server/bin/kube-apiserver.sh`启动脚本文件，写入以下内容
 
@@ -759,13 +757,13 @@ rm -rf server/bin/*.tar
     --v=2 \
     --logtostderr=true \
     --allow-privileged=true \
-    --bind-address="192.168.9.160" \
+    --bind-address="192.168.122.101" \
     --secure-port="6443" \
     --token-auth-file="/etc/kubernetes/bb.csv" \
-    --advertise-address="192.168.9.160" \
+    --advertise-address="192.168.122.101" \
     --service-cluster-ip-range="10.96.0.0/16" \
     --service-node-port-range="30000-60000" \
-    --etcd-servers="https://192.168.9.199:2379,https://192.168.9.192:2379,https://192.168.9.160:2379" \
+    --etcd-servers="https://192.168.122.101:2379,https://192.168.122.102:2379,https://192.168.122.103:2379" \
     --etcd-cafile="/etc/kubernetes/pki/ca.pem" \
     --etcd-certfile="/etc/kubernetes/pki/etcd.pem" \
     --etcd-keyfile="/etc/kubernetes/pki/etcd-key.pem" \
@@ -825,7 +823,7 @@ chmod +x /opt/kubernetes/server/bin/kube-apiserver.sh
 
 以上是我们在启动apiserver的时候常用的参数，apiserver具有很多参数，很多参数也有默认值，可以`./kube-apiserver --hep`命令查看更多的帮助。
 
-#### 6.3.2 使用supervisor运行
+#### 6.2.2 使用supervisor运行
 
 创建supervisor配置文件`/etc/supervisor/conf.d/kube-apiserver.conf`
 
