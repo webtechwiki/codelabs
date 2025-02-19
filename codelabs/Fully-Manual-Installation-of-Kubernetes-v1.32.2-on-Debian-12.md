@@ -869,6 +869,8 @@ supervisorctl update
 `k8s-101`在安装harbor时已经安装过，需要继续在`k8s-102`上安装
 
 ```bash
+# 安装依赖
+apt install -y gcc make libpcre3-dev libssl-dev zlib1g-dev
 # 下载代码
 wget https://nginx.org/download/nginx-1.26.3.tar.gz
 # 解压文件
@@ -881,8 +883,8 @@ cd nginx-1.26.3
 --with-stream \
 --with-http_stub_status_module \
 --with-http_ssl_module --with-http_v2_module \
---error-log-path=/data/log/nginx/error.log \
---http-log-path=/data/log/nginx/access.log
+--error-log-path=/data/logs/nginx/error.log \
+--http-log-path=/data/logs/nginx/access.log
 # 编译并安装
 make && make install
 # 设置链接
@@ -899,7 +901,7 @@ ln -s /usr/local/nginx/sbin/nginx /usr/local/bin/nginx
 stream {
     upstream kube-apiserver {
         server 192.168.122.101:6443  max_fails=3  fail_timeout=30s;
-        server 192.168.122.102:6443  max_fails=3  fail_timeout=3101
+        server 192.168.122.102:6443  max_fails=3  fail_timeout=30s;
         server 192.168.122.103:6443  max_fails=3  fail_timeout=30s;
     }
     server {
@@ -934,7 +936,7 @@ nginx
 在 `/etc/systemd/system/` 目录下创建一个 `nginx.service` 文件：
 
 ```bash
-sudo vim /etc/systemd/system/nginx.service
+vim /etc/systemd/system/nginx.service
 ```
 
 - 添加以下内容到服务文件中
@@ -959,13 +961,13 @@ WantedBy=multi-user.target
 - 保存并刷新 `systemd` 配置
 
 ```bash
-sudo systemctl daemon-reload
+systemctl daemon-reload
 ```
 
-- 启用 Nginx 开机自启
+- 设置 Nginx 开机自启并立即启动
 
 ```bash
-sudo systemctl enable nginx
+systemctl enable nginx --now
 ```
 
 ### 7.4 安装keepalived
@@ -1005,37 +1007,31 @@ chmod +x /etc/keepalived/check_port.sh
 
 ```shell
 ! Configuration File for keepalived
-# 全局配置
 global_defs {
-   router_id 192.168.122.101  # 当前服务器的唯一标识，通常用 IP 地址或主机名
-}
+   router_id 192.168.122.101
 
-# 定义健康检查脚本
 vrrp_script check_nginx {
-    script "/etc/keepalived/check_port.sh 7443"  # 检查端口 7443 是否在监听的脚本
-    interval 2  # 每隔 2 秒执行一次脚本
-    weight -20  # 如果脚本检查失败，当前服务器的优先级降低 20
+    script "/etc/keepalived/check_port.sh 7443"
+    interval 2
+    weight -20
 }
 
-# 定义一个 VRRP 实例
 vrrp_instance VI_1 {
-    state MASTER  # 当前服务器的初始状态是 MASTER（主服务器）
-    interface enp1s0  # 绑定虚拟 IP 的网络接口
-    virtual_router_id 251  # VRRP 实例的唯一 ID，范围是 1-255
-    priority 100  # 当前服务器的优先级，数值越大优先级越高
-    advert_int 1  # 每隔 1 秒发送一次 VRRP 通告
-    mcast_src_ip 192.168.122.101  # 发送 VRRP 通告的源 IP 地址
-    nopreempt  # 如果主服务器挂了又恢复，不会抢占虚拟 IP
+    state MASTER
+    interface enp1s0
+    virtual_router_id 251
+    priority 100
+    advert_int 1
+    mcast_src_ip 192.168.122.101
+    nopreempt
 
-    # 认证配置
     authentication {
-        auth_type PASS  # 认证类型为密码认证
-        auth_pass 1111  # 认证密码
+        auth_type PASS
+        auth_pass 1111
     }
 
-    # 虚拟 IP 地址配置
     virtual_ipaddress {
-        192.168.122.100  # 虚拟 IP 地址，主服务器会持有这个 IP
+        192.168.122.100
     }
 }
 ```
@@ -1057,7 +1053,7 @@ vrrp_script check_nginx {
 
 vrrp_instance VI_1 {
     state BACKUP
-    interface enp3s0
+    interface enp1s0
     virtual_router_id 251
     priority 90
     advert_int 1
@@ -1083,8 +1079,38 @@ systemctl restart keepalived
 systemctl enable keepalived
 ```
 
-需要注意的是，`interface`参数对应的是真实的主机网卡名称，`virtual_router_id`参数需要在同一个虚拟IP的前提下，设置需一致。
+需要注意的是，`interface`参数对应的是真实的主机网卡名称，`virtual_router_id`参数需要在同一个虚拟IP的前提下，设置需与主机一个网段的IP。
 
 ### 7.5 验证
 
-通过`ping 192.169.9.190`的方式进行验证，如果有正常返回，代表keepalived运行正常。
+通过`ping 192.168.122.100`的方式进行验证，如果有正常返回，代表keepalived运行正常。
+
+为了验证 Keepalived 的高可用性，可以手动模拟主服务器故障，观察虚拟 IP 是否切换到备用服务器。
+
+- （1）停止主服务器的 Keepalived 服务
+
+在主服务器上执行：
+
+```bash
+systemctl stop keepalived
+```
+
+- （2）检查备用服务器的虚拟 IP
+
+在备用服务器上执行：
+
+```bash
+ip addr show
+```
+
+检查虚拟 IP 是否绑定到备用服务器的网卡。
+
+- （3）恢复主服务器的 Keepalived 服务
+
+在主服务器上执行：
+
+```bash
+systemctl start keepalived
+```
+
+再次检查虚拟 IP 是否切换回主服务器。如果以上操作正常，则说明 Keepalived 的高可用性已经实现，否则需要检查安装过程以及 Keepalived 的配置文件，确保所有参数设置正确。
