@@ -20,7 +20,7 @@ Feedback Link: https://github.com/webtechwiki/codelabs/issues
 | k8s-102 | 192.168.122.101 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
 | k8s-103 | 192.168.122.101 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
 
-- `199-debian`: etcd服务器、控制节点、Proxy的L4、L7代理。
+- `k8s-101`: etcd服务器、控制节点、Proxy的L4、L7代理。
 
 同时作为运维主机，一些额外的服务由该主机提供，如：签发证书、dns服务、Docker的私有仓库服务、k8s资源配置清单仓库服务、共享存储（NFS）服务等。不过这些额外服务在需要的时候再安装，现在只是这么规划
 
@@ -682,7 +682,7 @@ etcdctl --cacert="/etc/kubernetes/pki/ca.pem" --cert="/etc/kubernetes/pki/etcd.p
 +----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
 ```
 
-为了验证etcd集群是否正常工作，我们还可以现在`199-debian`设置一个值，如下
+为了验证etcd集群是否正常工作，我们还可以现在`k8s-101`设置一个值，如下
 
 ```bash
 etcdctl put name lixiaoming123
@@ -857,3 +857,234 @@ supervisorctl update
 再使用`supervisorctl status`命令查看apiserver启动状态，如果显示如下内容，代表正常服务
 
 此时，还可以使用`netstat -luntp | grep kube-api`命令查看网络服务的端口是否正常，如果正常，将返回如下内容
+
+## 七、搭建L4层负载均衡
+
+负载均衡是网络层的一种机制，它将请求分发到后端服务器，从而实现高可用和高性能。负载均衡器通常包含一个或多个负载均衡器，每个负载均衡器负责将请求分发到后端服务器。负载均衡器通常使用TCP或UDP协议进行通信，并通过网络层（如TCP或UDP）将请求分发到后端服务器。负载均衡器通常使用轮询、权重、会话保持等功能来优化请求分发。
+
+现在，我们需要在`k8s-101`和`k8s-102`上安装nginx作为反向代理服务且两个服务实现负载均衡，再使用keepalived保证高可用性
+
+### 7.1 安装nginx
+
+`k8s-101`在安装harbor时已经安装过，需要继续在`k8s-102`上安装
+
+```bash
+# 下载代码
+wget https://nginx.org/download/nginx-1.26.3.tar.gz
+# 解压文件
+tar -zxvf nginx-1.26.3.tar.gz
+# 进入源码目录
+cd nginx-1.26.3
+# 配置编译参数，--prefix参数指定安装目录
+./configure \
+--prefix=/usr/local/nginx-1.26.3 \
+--with-stream \
+--with-http_stub_status_module \
+--with-http_ssl_module --with-http_v2_module \
+--error-log-path=/data/log/nginx/error.log \
+--http-log-path=/data/log/nginx/access.log
+# 编译并安装
+make && make install
+# 设置链接
+ln -s /usr/local/nginx-1.26.3 /usr/local/nginx
+ln -s /usr/local/nginx/sbin/nginx /usr/local/bin/nginx
+```
+
+### 7.2 配置nginx
+
+安装完成之后，我们需要两台机的nginx的配置文件`/usr/local/nginx/conf/nginx.conf`的`http`节点旁边添加四层反向代码规则，将7443端口的流量使用负载均衡的方式转发到3台主机的6443端口上
+
+```shell
+# 设置代理规则
+stream {
+    upstream kube-apiserver {
+        server 192.168.122.101:6443  max_fails=3  fail_timeout=30s;
+        server 192.168.122.102:6443  max_fails=3  fail_timeout=3101
+        server 192.168.122.103:6443  max_fails=3  fail_timeout=30s;
+    }
+    server {
+        listen  7443;
+        proxy_connect_timeout  2s;
+        proxy_timeout  900s;
+        proxy_pass kube-apiserver;
+    }
+}
+```
+
+在两台主机上配置好规则之后，通过`nginx -t`命令检查配置结果，如果输出以下内容代表配置正确
+
+```shell
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+配置成功之后，启动nginx，如下指令
+
+```bash
+# 启动ginx，k8s-101主机使用 nginx -s reload重新加载配置即可
+nginx
+```
+
+要让你手动编译安装的 Nginx 实现开机自启，你可以通过以下几种方式来完成（基于常见的 Linux 系统，如 Ubuntu、CentOS 等）。
+
+### 7.3 使用systemd设置nginx开机自启
+
+- 创建 Nginx 的 Systemd 服务文件
+
+在 `/etc/systemd/system/` 目录下创建一个 `nginx.service` 文件：
+
+```bash
+sudo vim /etc/systemd/system/nginx.service
+```
+
+- 添加以下内容到服务文件中
+
+```ini
+[Unit]
+Description=The NGINX HTTP and reverse proxy server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/nginx/sbin/nginx
+ExecReload=/usr/local/nginx/sbin/nginx -s reload
+ExecStop=/usr/local/nginx/sbin/nginx -s quit
+PIDFile=/usr/local/nginx/logs/nginx.pid
+Restart=on-failure
+Type=forking
+
+[Install]
+WantedBy=multi-user.target
+```
+
+- 保存并刷新 `systemd` 配置
+
+```bash
+sudo systemctl daemon-reload
+```
+
+- 启用 Nginx 开机自启
+
+```bash
+sudo systemctl enable nginx
+```
+
+### 7.4 安装keepalived
+
+Keepalived 的虚拟 IP 通过 VRRP 协议在多个服务器间切换，确保服务高可用性和负载均衡。这个虚拟 IP 是 Keepalived 配置的 IP 地址，不属于任何特定服务器，而是由主服务器持有，主服务器故障时切换到备用服务器。我们将使用keepalived实现代理服务器的高可用，以下是安装过程
+
+```shell
+apt install keepalived -y
+```
+
+在两台主机的创建`/etc/keepalived/check_port.sh`脚本文件，添加以下内容
+
+```shell
+#!/bin/bash
+CHK_PORT=$1
+if [ -n "$CHK_PORT" ]; then
+    PORT_PROCESS=`ss -lnt|grep $CHK_PORT|wc -l`
+    if [ $PORT_PROCESS -eq 0 ]; then
+        echo "Port $CHK_PORT Is Not Used, End"
+        exit 1
+    fi
+else
+    echo "Check Port Cant Be Empty!"
+    exit 1 
+fi
+```
+
+添加执行权限
+
+```shell
+chmod +x /etc/keepalived/check_port.sh
+```
+
+以上的操作就准备好keepalived的基础环境了，接下来我们使用`k8s-101`这台主机作为主节点，使用`k8s-102`作为重节点，进行以下配置
+
+`k8s-101`作为主节点，修改`/etc/keepalived/keepalived.conf`配置文件如下
+
+```shell
+! Configuration File for keepalived
+# 全局配置
+global_defs {
+   router_id 192.168.122.101  # 当前服务器的唯一标识，通常用 IP 地址或主机名
+}
+
+# 定义健康检查脚本
+vrrp_script check_nginx {
+    script "/etc/keepalived/check_port.sh 7443"  # 检查端口 7443 是否在监听的脚本
+    interval 2  # 每隔 2 秒执行一次脚本
+    weight -20  # 如果脚本检查失败，当前服务器的优先级降低 20
+}
+
+# 定义一个 VRRP 实例
+vrrp_instance VI_1 {
+    state MASTER  # 当前服务器的初始状态是 MASTER（主服务器）
+    interface enp1s0  # 绑定虚拟 IP 的网络接口
+    virtual_router_id 251  # VRRP 实例的唯一 ID，范围是 1-255
+    priority 100  # 当前服务器的优先级，数值越大优先级越高
+    advert_int 1  # 每隔 1 秒发送一次 VRRP 通告
+    mcast_src_ip 192.168.122.101  # 发送 VRRP 通告的源 IP 地址
+    nopreempt  # 如果主服务器挂了又恢复，不会抢占虚拟 IP
+
+    # 认证配置
+    authentication {
+        auth_type PASS  # 认证类型为密码认证
+        auth_pass 1111  # 认证密码
+    }
+
+    # 虚拟 IP 地址配置
+    virtual_ipaddress {
+        192.168.122.100  # 虚拟 IP 地址，主服务器会持有这个 IP
+    }
+}
+```
+
+`k8s-102`作为从节点，修改`/etc/keepalived/keepalived.conf`配置文件如下
+
+```shell
+! Configuration File for keepalived
+
+global_defs {
+   router_id 192.168.122.102
+}
+
+vrrp_script check_nginx {
+    script "/etc/keepalived/check_port.sh 7443"
+    interval 2
+    weight -20
+}
+
+vrrp_instance VI_1 {
+    state BACKUP
+    interface enp3s0
+    virtual_router_id 251
+    priority 90
+    advert_int 1
+    mcast_src_ip 192.168.122.101
+    nopreempt
+
+    authentication {
+        auth_type PASS
+        auth_pass 1111
+    }
+    virtual_ipaddress {
+        192.168.122.100
+    }
+}
+```
+
+启动服务
+
+```shell
+# 重启服务
+systemctl restart keepalived
+# 设置服务为开机自启
+systemctl enable keepalived
+```
+
+需要注意的是，`interface`参数对应的是真实的主机网卡名称，`virtual_router_id`参数需要在同一个虚拟IP的前提下，设置需一致。
+
+### 7.5 验证
+
+通过`ping 192.169.9.190`的方式进行验证，如果有正常返回，代表keepalived运行正常。
