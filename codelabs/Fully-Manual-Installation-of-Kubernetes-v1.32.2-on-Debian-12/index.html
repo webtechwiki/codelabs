@@ -54,7 +54,7 @@
 </td></tr>
 </table>
 <ul>
-<li><code>199-debian</code>: etcd服务器、控制节点、Proxy的L4、L7代理。</li>
+<li><code>k8s-101</code>: etcd服务器、控制节点、Proxy的L4、L7代理。</li>
 </ul>
 <p>同时作为运维主机，一些额外的服务由该主机提供，如：签发证书、dns服务、Docker的私有仓库服务、k8s资源配置清单仓库服务、共享存储（NFS）服务等。不过这些额外服务在需要的时候再安装，现在只是这么规划</p>
 <ul>
@@ -628,7 +628,7 @@ tcp        0      0 192.168.122.101:2380      0.0.0.0:*               LISTEN    
 | https://192.168.122.103:2379 | 61c90f737ccf2682 |   3.5.18 |  311 kB |     false |      false |         3 |      37628 |              37628 |        |
 +----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
 </code></pre>
-<p>为了验证etcd集群是否正常工作，我们还可以现在<code>199-debian</code>设置一个值，如下</p>
+<p>为了验证etcd集群是否正常工作，我们还可以现在<code>k8s-101</code>设置一个值，如下</p>
 <pre><code language="language-bash" class="language-bash">etcdctl put name lixiaoming123
 </code></pre>
 <p>再通过<code>k8s-102</code>和<code>k8s-103</code>去读取值，如果正常取到，代表etcd集群正常工作，如下命令</p>
@@ -769,6 +769,211 @@ stdout_event_enabled=false
 </code></pre>
 <p>再使用<code>supervisorctl status</code>命令查看apiserver启动状态，如果显示如下内容，代表正常服务</p>
 <p>此时，还可以使用<code>netstat -luntp | grep kube-api</code>命令查看网络服务的端口是否正常，如果正常，将返回如下内容</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="七、搭建L4层负载均衡" duration="0">
+        <p>负载均衡是网络层的一种机制，它将请求分发到后端服务器，从而实现高可用和高性能。负载均衡器通常包含一个或多个负载均衡器，每个负载均衡器负责将请求分发到后端服务器。负载均衡器通常使用TCP或UDP协议进行通信，并通过网络层（如TCP或UDP）将请求分发到后端服务器。负载均衡器通常使用轮询、权重、会话保持等功能来优化请求分发。</p>
+<p>现在，我们需要在<code>k8s-101</code>和<code>k8s-102</code>上安装nginx作为反向代理服务且两个服务实现负载均衡，再使用keepalived保证高可用性</p>
+<h2 is-upgraded>7.1 安装nginx</h2>
+<p><code>k8s-101</code>在安装harbor时已经安装过，需要继续在<code>k8s-102</code>上安装</p>
+<pre><code language="language-bash" class="language-bash"># 安装依赖
+apt install -y gcc make libpcre3-dev libssl-dev zlib1g-dev
+# 下载代码
+wget https://nginx.org/download/nginx-1.26.3.tar.gz
+# 解压文件
+tar -zxvf nginx-1.26.3.tar.gz
+# 进入源码目录
+cd nginx-1.26.3
+# 配置编译参数，--prefix参数指定安装目录
+./configure \
+--prefix=/usr/local/nginx-1.26.3 \
+--with-stream \
+--with-http_stub_status_module \
+--with-http_ssl_module --with-http_v2_module \
+--error-log-path=/data/logs/nginx/error.log \
+--http-log-path=/data/logs/nginx/access.log
+# 编译并安装
+make &amp;&amp; make install
+# 设置链接
+ln -s /usr/local/nginx-1.26.3 /usr/local/nginx
+ln -s /usr/local/nginx/sbin/nginx /usr/local/bin/nginx
+</code></pre>
+<h2 is-upgraded>7.2 配置nginx</h2>
+<p>安装完成之后，我们需要两台机的nginx的配置文件<code>/usr/local/nginx/conf/nginx.conf</code>的<code>http</code>节点旁边添加四层反向代码规则，将7443端口的流量使用负载均衡的方式转发到3台主机的6443端口上</p>
+<pre><code language="language-shell" class="language-shell"># 设置代理规则
+stream {
+    upstream kube-apiserver {
+        server 192.168.122.101:6443  max_fails=3  fail_timeout=30s;
+        server 192.168.122.102:6443  max_fails=3  fail_timeout=30s;
+        server 192.168.122.103:6443  max_fails=3  fail_timeout=30s;
+    }
+    server {
+        listen  7443;
+        proxy_connect_timeout  2s;
+        proxy_timeout  900s;
+        proxy_pass kube-apiserver;
+    }
+}
+</code></pre>
+<p>在两台主机上配置好规则之后，通过<code>nginx -t</code>命令检查配置结果，如果输出以下内容代表配置正确</p>
+<pre><code language="language-shell" class="language-shell">nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+</code></pre>
+<p>配置成功之后，启动nginx，如下指令</p>
+<pre><code language="language-bash" class="language-bash"># 启动ginx，k8s-101主机使用 nginx -s reload重新加载配置即可
+nginx
+</code></pre>
+<p>要让你手动编译安装的 Nginx 实现开机自启，你可以通过以下几种方式来完成（基于常见的 Linux 系统，如 Ubuntu、CentOS 等）。</p>
+<h2 is-upgraded>7.3 使用systemd设置nginx开机自启</h2>
+<ul>
+<li>创建 Nginx 的 Systemd 服务文件</li>
+</ul>
+<p>在 <code>/etc/systemd/system/</code> 目录下创建一个 <code>nginx.service</code> 文件：</p>
+<pre><code language="language-bash" class="language-bash">vim /etc/systemd/system/nginx.service
+</code></pre>
+<ul>
+<li>添加以下内容到服务文件中</li>
+</ul>
+<pre><code language="language-ini" class="language-ini">[Unit]
+Description=The NGINX HTTP and reverse proxy server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/nginx/sbin/nginx
+ExecReload=/usr/local/nginx/sbin/nginx -s reload
+ExecStop=/usr/local/nginx/sbin/nginx -s quit
+PIDFile=/usr/local/nginx/logs/nginx.pid
+Restart=on-failure
+Type=forking
+
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<ul>
+<li>保存并刷新 <code>systemd</code> 配置</li>
+</ul>
+<pre><code language="language-bash" class="language-bash">systemctl daemon-reload
+</code></pre>
+<ul>
+<li>设置 Nginx 开机自启并立即启动</li>
+</ul>
+<pre><code language="language-bash" class="language-bash">systemctl enable nginx --now
+</code></pre>
+<h2 is-upgraded>7.4 安装keepalived</h2>
+<p>Keepalived 的虚拟 IP 通过 VRRP 协议在多个服务器间切换，确保服务高可用性和负载均衡。这个虚拟 IP 是 Keepalived 配置的 IP 地址，不属于任何特定服务器，而是由主服务器持有，主服务器故障时切换到备用服务器。我们将使用keepalived实现代理服务器的高可用，以下是安装过程</p>
+<pre><code language="language-shell" class="language-shell">apt install keepalived -y
+</code></pre>
+<p>在两台主机的创建<code>/etc/keepalived/check_port.sh</code>脚本文件，添加以下内容</p>
+<pre><code language="language-shell" class="language-shell">#!/bin/bash
+CHK_PORT=$1
+if [ -n &#34;$CHK_PORT&#34; ]; then
+    PORT_PROCESS=`ss -lnt|grep $CHK_PORT|wc -l`
+    if [ $PORT_PROCESS -eq 0 ]; then
+        echo &#34;Port $CHK_PORT Is Not Used, End&#34;
+        exit 1
+    fi
+else
+    echo &#34;Check Port Cant Be Empty!&#34;
+    exit 1 
+fi
+</code></pre>
+<p>添加执行权限</p>
+<pre><code language="language-shell" class="language-shell">chmod +x /etc/keepalived/check_port.sh
+</code></pre>
+<p>以上的操作就准备好keepalived的基础环境了，接下来我们使用<code>k8s-101</code>这台主机作为主节点，使用<code>k8s-102</code>作为重节点，进行以下配置</p>
+<p><code>k8s-101</code>作为主节点，修改<code>/etc/keepalived/keepalived.conf</code>配置文件如下</p>
+<pre><code language="language-shell" class="language-shell">! Configuration File for keepalived
+global_defs {
+   router_id 192.168.122.101
+
+vrrp_script check_nginx {
+    script &#34;/etc/keepalived/check_port.sh 7443&#34;
+    interval 2
+    weight -20
+}
+
+vrrp_instance VI_1 {
+    state MASTER
+    interface enp1s0
+    virtual_router_id 251
+    priority 100
+    advert_int 1
+    mcast_src_ip 192.168.122.101
+    nopreempt
+
+    authentication {
+        auth_type PASS
+        auth_pass 1111
+    }
+
+    virtual_ipaddress {
+        192.168.122.100
+    }
+}
+</code></pre>
+<p><code>k8s-102</code>作为从节点，修改<code>/etc/keepalived/keepalived.conf</code>配置文件如下</p>
+<pre><code language="language-shell" class="language-shell">! Configuration File for keepalived
+
+global_defs {
+   router_id 192.168.122.102
+}
+
+vrrp_script check_nginx {
+    script &#34;/etc/keepalived/check_port.sh 7443&#34;
+    interval 2
+    weight -20
+}
+
+vrrp_instance VI_1 {
+    state BACKUP
+    interface enp1s0
+    virtual_router_id 251
+    priority 90
+    advert_int 1
+    mcast_src_ip 192.168.122.101
+    nopreempt
+
+    authentication {
+        auth_type PASS
+        auth_pass 1111
+    }
+    virtual_ipaddress {
+        192.168.122.100
+    }
+}
+</code></pre>
+<p>启动服务</p>
+<pre><code language="language-shell" class="language-shell"># 重启服务
+systemctl restart keepalived
+# 设置服务为开机自启
+systemctl enable keepalived
+</code></pre>
+<p>需要注意的是，<code>interface</code>参数对应的是真实的主机网卡名称，<code>virtual_router_id</code>参数需要在同一个虚拟IP的前提下，设置需与主机一个网段的IP。</p>
+<h2 is-upgraded>7.5 验证</h2>
+<p>通过<code>ping 192.168.122.100</code>的方式进行验证，如果有正常返回，代表keepalived运行正常。</p>
+<p>为了验证 Keepalived 的高可用性，可以手动模拟主服务器故障，观察虚拟 IP 是否切换到备用服务器。</p>
+<ul>
+<li>（1）停止主服务器的 Keepalived 服务</li>
+</ul>
+<p>在主服务器上执行：</p>
+<pre><code language="language-bash" class="language-bash">systemctl stop keepalived
+</code></pre>
+<ul>
+<li>（2）检查备用服务器的虚拟 IP</li>
+</ul>
+<p>在备用服务器上执行：</p>
+<pre><code language="language-bash" class="language-bash">ip addr show
+</code></pre>
+<p>检查虚拟 IP 是否绑定到备用服务器的网卡。</p>
+<ul>
+<li>（3）恢复主服务器的 Keepalived 服务</li>
+</ul>
+<p>在主服务器上执行：</p>
+<pre><code language="language-bash" class="language-bash">systemctl start keepalived
+</code></pre>
+<p>再次检查虚拟 IP 是否切换回主服务器。如果以上操作正常，则说明 Keepalived 的高可用性已经实现，否则需要检查安装过程以及 Keepalived 的配置文件，确保所有参数设置正确。</p>
 
 
       </google-codelab-step>
