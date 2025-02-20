@@ -29,8 +29,65 @@
                   feedback-link="https://github.com/webtechwiki/codelabs/issues">
     
       <google-codelab-step label="一、基础环境准备" duration="0">
-        <h2 is-upgraded>1.1 集群主机规划</h2>
-<p>所有机器的CPU都是x86的64位架构，并且安装了<code>Debian GNU/Linux 11 (bullseye)</code>。各个主机配置如下</p>
+        <h2 is-upgraded>1.1 kubernetes集群包含的组件</h2>
+<p>Kubernetes 集群由 **Master 节点（控制平面）**和 **Node 节点（工作节点）**组成，各自包含以下核心组件：</p>
+<h3 is-upgraded>1.1.1 Master节点组件</h3>
+<ol type="1">
+<li><strong>API Server（kube-apiserver）</strong><ul>
+<li>集群的入口，提供 REST API，处理所有操作请求（如创建、更新、删除资源）。</li>
+<li>负责与其他组件通信（如 <code>kubelet</code>、<code>kube-scheduler</code> 等）。</li>
+</ul>
+</li>
+<li><strong>etcd</strong><ul>
+<li>分布式键值存储数据库，保存集群的所有状态和配置数据（如 Pod、Service、Namespace 等）。</li>
+<li>是 Kubernetes 的&#34;唯一真实数据源&#34;（Single Source of Truth）。</li>
+</ul>
+</li>
+<li><strong>Scheduler（kube-scheduler）</strong><ul>
+<li>监听未调度的 Pod，根据资源需求、节点负载等因素，将 Pod 分配到合适的 Node 上运行。</li>
+</ul>
+</li>
+<li><strong>Controller Manager（kube-controller-manager）</strong><ul>
+<li>运行一系列控制器，确保集群状态与期望一致。</li>
+<li>核心控制器包括： <ul>
+<li>Node Controller（监控节点状态）</li>
+<li>Deployment Controller（管理副本数）</li>
+<li>Service Controller（管理 Service 与 Endpoint）</li>
+<li>其他控制器（如 ReplicaSet、Namespace 控制器等）。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>（可选）Cloud Controller Manager</strong><ul>
+<li>当集群运行在公有云环境时，负责与云平台交互（如负载均衡、存储卷、节点管理）。</li>
+<li>解耦 Kubernetes 与特定云厂商的代码。</li>
+</ul>
+</li>
+</ol>
+<h3 is-upgraded>1.1.2 Node 节点组件</h3>
+<ol type="1">
+<li><strong>kubelet</strong><ul>
+<li>运行在每个 Node 上的&#34;节点代理&#34;，负责： <ul>
+<li>与 Master 通信，接收 Pod 定义（通过 API Server）。</li>
+<li>管理 Pod 生命周期（启动、停止、监控容器）。</li>
+<li>上报节点状态（如资源使用、Pod 状态）到 Master。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>kube-proxy</strong><ul>
+<li>维护节点上的网络规则，实现 Service 的抽象（如负载均衡、服务发现）。</li>
+<li>通过 iptables/IPVS 或用户空间代理转发流量到 Pod。</li>
+</ul>
+</li>
+<li><strong>容器运行时（Container Runtime）</strong><ul>
+<li>负责运行容器的底层软件，如 Docker、containerd、CRI-O。</li>
+<li>与 Kubernetes 通过 CRI（Container Runtime Interface）交互。</li>
+</ul>
+</li>
+</ol>
+<h2 is-upgraded>1.2 集群主机规划</h2>
+<p>所有机器的CPU都是x86的64位架构，并且安装了<code>Debian GNU/Linux 12 (bookworm)</code>。各个主机配置如下</p>
 <table>
 <tr><td colspan="1" rowspan="1"><p>主机</p>
 </td><td colspan="1" rowspan="1"><p>IP</p>
@@ -43,25 +100,27 @@
 </td><td colspan="1" rowspan="1"><p>内存:4G + SSD硬盘:30G + CPU:2核</p>
 </td></tr>
 <tr><td colspan="1" rowspan="1"><p>k8s-102</p>
-</td><td colspan="1" rowspan="1"><p>192.168.122.101</p>
+</td><td colspan="1" rowspan="1"><p>192.168.122.102</p>
 </td><td colspan="1" rowspan="1"><p>Debian GNU/Linux 12 (bookworm)</p>
 </td><td colspan="1" rowspan="1"><p>内存:4G + SSD硬盘:30G + CPU:2核</p>
 </td></tr>
 <tr><td colspan="1" rowspan="1"><p>k8s-103</p>
-</td><td colspan="1" rowspan="1"><p>192.168.122.101</p>
+</td><td colspan="1" rowspan="1"><p>192.168.122.103</p>
 </td><td colspan="1" rowspan="1"><p>Debian GNU/Linux 12 (bookworm)</p>
 </td><td colspan="1" rowspan="1"><p>内存:4G + SSD硬盘:30G + CPU:2核</p>
 </td></tr>
 </table>
+<p>这三台主机在集群中分别充当的角色如下：</p>
 <ul>
 <li><code>k8s-101</code>: etcd服务器、控制节点、Proxy的L4、L7代理。</li>
 </ul>
 <p>同时作为运维主机，一些额外的服务由该主机提供，如：签发证书、dns服务、Docker的私有仓库服务、k8s资源配置清单仓库服务、共享存储（NFS）服务等。不过这些额外服务在需要的时候再安装，现在只是这么规划</p>
 <ul>
-<li><code>k8s-102</code>: k8s-103</li>
-<li><code>k8s-102</code>: k8s-103 以上是在资源有限的情况下做的高可用资源分配，如果你的服务器资源充足，应当将各个服务分别部署到各个主机上，这样更加合理。</li>
+<li><code>k8s-102</code>: etcd服务器、控制节点、工作节点、Proxy的L4、L7代理</li>
+<li><code>k8s-102</code>: etcd服务器、控制节点、工作节点</li>
 </ul>
-<h2 is-upgraded>1.2 设置hostsname</h2>
+<p>以上是在资源有限的情况下做的高可用资源分配，其实就是把其群的各个组件合理分配到这3台主机上。如果你的服务器资源充足，应当将各个服务分别独立部署到更多主机上，这样更加合理。</p>
+<h2 is-upgraded>1.3 设置hostsname</h2>
 <p>在 <code>192.168.122.101</code> 执行以下命令</p>
 <pre><code language="language-bash" class="language-bash">hostnamectl set-hostname k8s-101
 cat &gt;&gt; /etc/hosts &lt;&lt;EOF
@@ -80,7 +139,7 @@ cat &gt;&gt; /etc/hosts &lt;&lt;EOF
 192.168.122.103 k8s-103
 EOF
 </code></pre>
-<h2 is-upgraded>1.3 关闭交换分区</h2>
+<h2 is-upgraded>1.4 关闭交换分区</h2>
 <p>ubernetes 默认不支持在启用交换分区的情况下运行，可以使用以下命令临时关闭交换分区</p>
 <pre><code language="language-bash" class="language-bash">swapoff -a
 </code></pre>

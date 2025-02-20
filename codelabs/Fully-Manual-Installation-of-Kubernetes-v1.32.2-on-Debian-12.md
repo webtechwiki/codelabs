@@ -10,25 +10,73 @@ Feedback Link: https://github.com/webtechwiki/codelabs/issues
 
 ## 一、基础环境准备
 
-### 1.1 集群主机规划
+### 1.1 kubernetes集群包含的组件
 
-所有机器的CPU都是x86的64位架构，并且安装了`Debian GNU/Linux 11 (bullseye)`。各个主机配置如下
+Kubernetes 集群由 **Master 节点（控制平面）**和 **Node 节点（工作节点）**组成，各自包含以下核心组件：
+
+#### 1.1.1 Master节点组件
+
+1. **API Server（kube-apiserver）**  
+   - 集群的入口，提供 REST API，处理所有操作请求（如创建、更新、删除资源）。  
+   - 负责与其他组件通信（如 `kubelet`、`kube-scheduler` 等）。
+
+2. **etcd**  
+   - 分布式键值存储数据库，保存集群的所有状态和配置数据（如 Pod、Service、Namespace 等）。  
+   - 是 Kubernetes 的“唯一真实数据源”（Single Source of Truth）。
+
+3. **Scheduler（kube-scheduler）**  
+   - 监听未调度的 Pod，根据资源需求、节点负载等因素，将 Pod 分配到合适的 Node 上运行。
+
+4. **Controller Manager（kube-controller-manager）**  
+   - 运行一系列控制器，确保集群状态与期望一致。  
+   - 核心控制器包括：  
+     - Node Controller（监控节点状态）  
+     - Deployment Controller（管理副本数）  
+     - Service Controller（管理 Service 与 Endpoint）  
+     - 其他控制器（如 ReplicaSet、Namespace 控制器等）。
+
+5. **（可选）Cloud Controller Manager**  
+   - 当集群运行在公有云环境时，负责与云平台交互（如负载均衡、存储卷、节点管理）。  
+   - 解耦 Kubernetes 与特定云厂商的代码。
+
+#### 1.1.2 Node 节点组件
+
+1. **kubelet**  
+   - 运行在每个 Node 上的“节点代理”，负责：  
+     - 与 Master 通信，接收 Pod 定义（通过 API Server）。  
+     - 管理 Pod 生命周期（启动、停止、监控容器）。  
+     - 上报节点状态（如资源使用、Pod 状态）到 Master。
+
+2. **kube-proxy**  
+   - 维护节点上的网络规则，实现 Service 的抽象（如负载均衡、服务发现）。  
+   - 通过 iptables/IPVS 或用户空间代理转发流量到 Pod。
+
+3. **容器运行时（Container Runtime）**  
+   - 负责运行容器的底层软件，如 Docker、containerd、CRI-O。  
+   - 与 Kubernetes 通过 CRI（Container Runtime Interface）交互。
+
+### 1.2 集群主机规划
+
+所有机器的CPU都是x86的64位架构，并且安装了`Debian GNU/Linux 12 (bookworm)`。各个主机配置如下
 
 |  主机   |       IP        |            操作系统            |              配置               |
 | ------- | --------------- | ------------------------------ | ------------------------------- |
 | k8s-101 | 192.168.122.101 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
-| k8s-102 | 192.168.122.101 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
-| k8s-103 | 192.168.122.101 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
+| k8s-102 | 192.168.122.102 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
+| k8s-103 | 192.168.122.103 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
+
+这三台主机在集群中分别充当的角色如下：
 
 - `k8s-101`: etcd服务器、控制节点、Proxy的L4、L7代理。
 
 同时作为运维主机，一些额外的服务由该主机提供，如：签发证书、dns服务、Docker的私有仓库服务、k8s资源配置清单仓库服务、共享存储（NFS）服务等。不过这些额外服务在需要的时候再安装，现在只是这么规划
 
-- `k8s-102`: k8s-103
-- `k8s-102`: k8s-103
-以上是在资源有限的情况下做的高可用资源分配，如果你的服务器资源充足，应当将各个服务分别部署到各个主机上，这样更加合理。
+- `k8s-102`: etcd服务器、控制节点、工作节点、Proxy的L4、L7代理
+- `k8s-102`: etcd服务器、控制节点、工作节点
 
-### 1.2 设置hostsname
+以上是在资源有限的情况下做的高可用资源分配，其实就是把其群的各个组件合理分配到这3台主机上。如果你的服务器资源充足，应当将各个服务分别独立部署到更多主机上，这样更加合理。
+
+### 1.3 设置hostsname
 
 在 `192.168.122.101` 执行以下命令
 
@@ -57,7 +105,7 @@ cat >> /etc/hosts <<EOF
 EOF
 ```
 
-### 1.3 关闭交换分区
+### 1.4 关闭交换分区
 
 ubernetes 默认不支持在启用交换分区的情况下运行，可以使用以下命令临时关闭交换分区
 
