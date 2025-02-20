@@ -1538,26 +1538,21 @@ kubectl apply -f nginx-pod.yaml
 </code></pre>
 <p>创建新的pod之后，使用<code>kubectl get pod -o wide</code>查看pod所处的节点，此时我们在任意工作节点请求该IP，都能成功请求。</p>
 <h2 is-upgraded>13.2 安装coredns</h2>
+<p>CoreDNS 是 Kubernetes 集群的 DNS 服务，负责为集群内的服务提供域名解析和服务发现功能，使得 Pod 可以通过服务名称访问其他服务。它允许 Pod 通过服务名称（如 <code>my-service.default.svc.cluster.local</code>）来访问其他服务，而不需要知道具体的 IP 地址。</p>
 <h3 is-upgraded>13.2.1 下载基础资源配置文件</h3>
 <p>下载corndns资源配置文件</p>
-<pre><code language="language-bash" class="language-bash"># 下载
-wget https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/coredns.yaml.sed
-# 重命名
-mv coredns.yaml.sed coredns.yaml
+<pre><code language="language-bash" class="language-bash">cd /etc/kubernetes
+wget https://github.com/kubernetes/kubernetes/blob/master/cluster/addons/dns/coredns/coredns.yaml.base -O coredns.yml
 </code></pre>
 <h3 is-upgraded>13.2.2 修改配置</h3>
 <p>做出以下修改：</p>
-<p>大概第62行，找到配置文件中的<code>CLUSTER_DOMAIN</code>、<code>REVERSE_CIDRS</code>这两个变量改为集群域名，如下</p>
+<p>找到配置文件中的<code>__DNS__DOMAIN__</code>这两个变量改为集群域名，如下</p>
 <pre><code language="language-yml" class="language-yml">kubernetes cluster.local in-addr.arpa ip6.arpa {
   fallthrough in-addr.arpa ip6.arpa
 }
 </code></pre>
-<p>大概第66行，<code>UPSTREAMNAMESERVER</code>改为宿主机DNS配置<code>/etc/resolve.conf</code>，如下</p>
-<pre><code language="language-yaml" class="language-yaml">forward . /etc/resolve.conf {
-  max_concurrent 1000
-}
-</code></pre>
-<p>大概在186行，将<code>CLUSTER_DNS_IP</code>改为kubelet配置文件中指定的集群IP地址<code>10.96.0.10</code>，如下</p>
+<p>将 <code>__DNS__MEMORY__LIMIT_</code> 改为<code>512Mi</code>，如下</p>
+<p>将<code>__DNS_SERVER__</code>改为kubelet配置文件中指定的集群IP地址<code>10.96.0.10</code>，如下</p>
 <pre><code language="language-yml" class="language-yml">spec:
   selector:
     k8s-app: kube-dns
@@ -1565,7 +1560,7 @@ mv coredns.yaml.sed coredns.yaml
 </code></pre>
 <h3 is-upgraded>13.2.3 启动服务</h3>
 <p>使用以下命令启动服务</p>
-<pre><code language="language-bash" class="language-bash">kubectl apply -f coredns.yaml
+<pre><code language="language-bash" class="language-bash">kubectl apply -f coredns.yml
 </code></pre>
 
 

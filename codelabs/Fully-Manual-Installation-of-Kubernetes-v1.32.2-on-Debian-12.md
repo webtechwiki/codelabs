@@ -1839,22 +1839,22 @@ kubectl apply -f nginx-pod.yaml
 
 ### 13.2 安装coredns
 
+CoreDNS 是 Kubernetes 集群的 DNS 服务，负责为集群内的服务提供域名解析和服务发现功能，使得 Pod 可以通过服务名称访问其他服务。它允许 Pod 通过服务名称（如 `my-service.default.svc.cluster.local`）来访问其他服务，而不需要知道具体的 IP 地址。
+
 #### 13.2.1 下载基础资源配置文件
 
 下载corndns资源配置文件
 
 ```bash
-# 下载
-wget https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/coredns.yaml.sed
-# 重命名
-mv coredns.yaml.sed coredns.yaml
+cd /etc/kubernetes
+wget https://github.com/kubernetes/kubernetes/blob/master/cluster/addons/dns/coredns/coredns.yaml.base -O coredns.yml
 ```
 
 #### 13.2.2 修改配置
 
 做出以下修改：
 
-大概第62行，找到配置文件中的`CLUSTER_DOMAIN`、`REVERSE_CIDRS`这两个变量改为集群域名，如下
+找到配置文件中的`__DNS__DOMAIN__`这两个变量改为集群域名，如下
 
 ```yml
 kubernetes cluster.local in-addr.arpa ip6.arpa {
@@ -1862,15 +1862,9 @@ kubernetes cluster.local in-addr.arpa ip6.arpa {
 }
 ```
 
-大概第66行，`UPSTREAMNAMESERVER`改为宿主机DNS配置`/etc/resolve.conf`，如下
+将 `__DNS__MEMORY__LIMIT_` 改为`512Mi`，如下
 
-```yaml
-forward . /etc/resolve.conf {
-  max_concurrent 1000
-}
-```
-
-大概在186行，将`CLUSTER_DNS_IP`改为kubelet配置文件中指定的集群IP地址`10.96.0.10`，如下
+将`__DNS_SERVER__`改为kubelet配置文件中指定的集群IP地址`10.96.0.10`，如下
 
 ```yml
 spec:
@@ -1884,5 +1878,5 @@ spec:
 使用以下命令启动服务
 
 ```bash
-kubectl apply -f coredns.yaml
+kubectl apply -f coredns.yml
 ```

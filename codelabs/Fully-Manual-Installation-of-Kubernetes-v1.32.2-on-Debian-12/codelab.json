@@ -3,7 +3,7 @@
   "format": "html",
   "prefix": "https://storage.googleapis.com",
   "mainga": "UA-49880327-14",
-  "updated": "2025-02-20T16:04:04+08:00",
+  "updated": "2025-02-20T23:44:44+08:00",
   "id": "Fully-Manual-Installation-of-Kubernetes-v1.32.2-on-Debian-12",
   "duration": 0,
   "title": "在 Debian 12 上完全手动安装 kubernetes v1.32.2",
