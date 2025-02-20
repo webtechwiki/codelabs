@@ -1299,7 +1299,7 @@ httpCheckFrequency: 0s
 imageMinimumGCAge: 0s
 kind: KubeletConfiguration
 </code></pre>
-<p>这里我们指定clusterDNS的IP是10.96.0.10。</p>
+<p>这里我们指定clusterDNS的IP是<code>10.96.0.10</code>，后续我们会在<code>kube-dns</code>中配置<code>CoreDNS</code>的IP为<code>10.96.0.10</code>。</p>
 <h2 is-upgraded>11.3 配置kubelet启动脚本</h2>
 <h3 is-upgraded>11.3.1 配置启动脚本</h3>
 <p>接下来在<code>k8s-102</code>和<code>k8s-103</code>上启动kubelet，在让kubelet启动之前，我们需要有一个基础的pause镜像，以下是拉取命令，该镜像负责其k8s集群中pod启动之前的初始化操作</p>
@@ -1495,6 +1495,78 @@ spec:
 pod1   1/1     Running   0          94s   10.22.0.2   node-103   &lt;none&gt;           &lt;none&gt;
 </code></pre>
 <p>创建的pod运行在<code>node-103</code>这台主机上，在这台机使用<code>curl 10.22.0.2</code>命令能正常访问到nginx服务。但是如果我们在另一个节点<code>node-102</code>上执行<code>curl 10.22.0.2</code>会发现访问不到。原因是这两个节点上的容器在各自的虚拟网络内，我们将到后续的章节安装通过安装 k8s 网络插件的方式，实现不同工作节点的容器网络互相访问的功能。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="十三、安装网络插件" duration="0">
+        <p>以下的操作，我们在<code>k8s-101</code>节点去完成。</p>
+<h2 is-upgraded>13.1 安装calico</h2>
+<p>Calico 是 Kubernetes 集群的网络基础设施，负责 Pod 的网络连接、跨节点通信和网络策略管理。根据以下步骤进行安装。</p>
+<pre><code language="language-bash" class="language-bash">cd /etc/kubernetes
+wget https://docs.projectcalico.org/manifests/calico.yaml
+</code></pre>
+<p>修改calico.yaml文件，将<code>CALICO_IPV4POOL_CIDR</code>改为和<code>kube-proxy</code>的配置一样，如下</p>
+<pre><code language="language-ini" class="language-ini">- name: CALICO_IPV4POOL_CIDR
+  value: &#34;10.244.0.0/16&#34;
+</code></pre>
+<p>在calico配置文件中，定义了一下容器镜像，在运行calico的时候将会用到，可以使用 <code>cat calico.yaml  | grep image</code> 命令查看所有需要的镜像列表，如下</p>
+<pre><code language="language-yaml" class="language-yaml">image: docker.io/calico/cni:v3.25.0
+imagePullPolicy: IfNotPresent
+image: docker.io/calico/cni:v3.25.0
+imagePullPolicy: IfNotPresent
+image: docker.io/calico/node:v3.25.0
+imagePullPolicy: IfNotPresent
+image: docker.io/calico/node:v3.25.0
+imagePullPolicy: IfNotPresent
+image: docker.io/calico/kube-controllers:v3.25.0
+imagePullPolicy: IfNotPresent
+</code></pre>
+<p>我们可以看到，这些镜像都来自<code>docker.io</code>，但因为一些原因，在撰写这篇文档时，国内访问 <code>docker.io</code> 的网络不太顺畅。因此你需要想办法让你的工作节点宿主机能拉取到这些镜像，最后再创建<code>calico</code>服务。或者你需要修改配置文件，改成这些镜像在可以拉取到的国内镜像站对应的镜像名。</p>
+<p>解决依赖的镜像的拉取问题后，最后创建calico服务</p>
+<pre><code language="language-bash" class="language-bash">kubectl apply -fcalico.yaml
+</code></pre>
+<p>执行命令之后，calico会拉去远端的镜像并运行，执行 <code>kubectl get pods -n kube-system</code> 等到所有pod都处于<code>Running</code>状态代表服务启动完成，如下</p>
+<pre><code language="language-bash" class="language-bash">NAME                                       READY   STATUS    RESTARTS   AGE
+calico-kube-controllers-6799f5f4b4-xqpf9   1/1     Running   0          3m34s
+calico-node-9bt29                          1/1     Running   0          3m34s
+calico-node-djxvc                          1/1     Running   0          3m34s
+</code></pre>
+<p>此时calico已经正常运行了，如果上节创建的nginx的pod还没有删除的话，先删除掉再创建，如下命令</p>
+<pre><code language="language-bash" class="language-bash">kubectl delete -f nginx-pod.yaml
+kubectl apply -f nginx-pod.yaml
+</code></pre>
+<p>创建新的pod之后，使用<code>kubectl get pod -o wide</code>查看pod所处的节点，此时我们在任意工作节点请求该IP，都能成功请求。</p>
+<h2 is-upgraded>13.2 安装coredns</h2>
+<h3 is-upgraded>13.2.1 下载基础资源配置文件</h3>
+<p>下载corndns资源配置文件</p>
+<pre><code language="language-bash" class="language-bash"># 下载
+wget https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/coredns.yaml.sed
+# 重命名
+mv coredns.yaml.sed coredns.yaml
+</code></pre>
+<h3 is-upgraded>13.2.2 修改配置</h3>
+<p>做出以下修改：</p>
+<p>大概第62行，找到配置文件中的<code>CLUSTER_DOMAIN</code>、<code>REVERSE_CIDRS</code>这两个变量改为集群域名，如下</p>
+<pre><code language="language-yml" class="language-yml">kubernetes cluster.local in-addr.arpa ip6.arpa {
+  fallthrough in-addr.arpa ip6.arpa
+}
+</code></pre>
+<p>大概第66行，<code>UPSTREAMNAMESERVER</code>改为宿主机DNS配置<code>/etc/resolve.conf</code>，如下</p>
+<pre><code language="language-yaml" class="language-yaml">forward . /etc/resolve.conf {
+  max_concurrent 1000
+}
+</code></pre>
+<p>大概在186行，将<code>CLUSTER_DNS_IP</code>改为kubelet配置文件中指定的集群IP地址<code>10.96.0.10</code>，如下</p>
+<pre><code language="language-yml" class="language-yml">spec:
+  selector:
+    k8s-app: kube-dns
+  clusterIP: 10.96.0.10
+</code></pre>
+<h3 is-upgraded>13.2.3 启动服务</h3>
+<p>使用以下命令启动服务</p>
+<pre><code language="language-bash" class="language-bash">kubectl apply -f coredns.yaml
+</code></pre>
 
 
       </google-codelab-step>

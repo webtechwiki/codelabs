@@ -1507,7 +1507,7 @@ imageMinimumGCAge: 0s
 kind: KubeletConfiguration
 ```
 
-这里我们指定clusterDNS的IP是10.96.0.10。
+这里我们指定clusterDNS的IP是`10.96.0.10`，后续我们会在`kube-dns`中配置`CoreDNS`的IP为`10.96.0.10`。
 
 ### 11.3 配置kubelet启动脚本
 
@@ -1775,3 +1775,114 @@ pod1   1/1     Running   0          94s   10.22.0.2   node-103   <none>         
 ```
 
 创建的pod运行在`node-103`这台主机上，在这台机使用`curl 10.22.0.2`命令能正常访问到nginx服务。但是如果我们在另一个节点`node-102`上执行`curl 10.22.0.2`会发现访问不到。原因是这两个节点上的容器在各自的虚拟网络内，我们将到后续的章节安装通过安装 k8s 网络插件的方式，实现不同工作节点的容器网络互相访问的功能。
+
+## 十三、安装网络插件
+
+以下的操作，我们在`k8s-101`节点去完成。
+
+### 13.1 安装calico
+
+Calico 是 Kubernetes 集群的网络基础设施，负责 Pod 的网络连接、跨节点通信和网络策略管理。根据以下步骤进行安装。
+
+```bash
+cd /etc/kubernetes
+wget https://docs.projectcalico.org/manifests/calico.yaml
+```
+
+修改calico.yaml文件，将`CALICO_IPV4POOL_CIDR`改为和`kube-proxy`的配置一样，如下
+
+```ini
+- name: CALICO_IPV4POOL_CIDR
+  value: "10.244.0.0/16"
+```
+
+在calico配置文件中，定义了一下容器镜像，在运行calico的时候将会用到，可以使用 `cat calico.yaml  | grep image` 命令查看所有需要的镜像列表，如下
+
+```yaml
+image: docker.io/calico/cni:v3.25.0
+imagePullPolicy: IfNotPresent
+image: docker.io/calico/cni:v3.25.0
+imagePullPolicy: IfNotPresent
+image: docker.io/calico/node:v3.25.0
+imagePullPolicy: IfNotPresent
+image: docker.io/calico/node:v3.25.0
+imagePullPolicy: IfNotPresent
+image: docker.io/calico/kube-controllers:v3.25.0
+imagePullPolicy: IfNotPresent
+```
+
+我们可以看到，这些镜像都来自`docker.io`，但因为一些原因，在撰写这篇文档时，国内访问 `docker.io` 的网络不太顺畅。因此你需要想办法让你的工作节点宿主机能拉取到这些镜像，最后再创建`calico`服务。或者你需要修改配置文件，改成这些镜像在可以拉取到的国内镜像站对应的镜像名。
+
+解决依赖的镜像的拉取问题后，最后创建calico服务
+
+```bash
+kubectl apply -fcalico.yaml
+```
+
+执行命令之后，calico会拉去远端的镜像并运行，执行 `kubectl get pods -n kube-system` 等到所有pod都处于`Running`状态代表服务启动完成，如下
+
+```bash
+NAME                                       READY   STATUS    RESTARTS   AGE
+calico-kube-controllers-6799f5f4b4-xqpf9   1/1     Running   0          3m34s
+calico-node-9bt29                          1/1     Running   0          3m34s
+calico-node-djxvc                          1/1     Running   0          3m34s
+```
+
+此时calico已经正常运行了，如果上节创建的nginx的pod还没有删除的话，先删除掉再创建，如下命令
+
+```bash
+kubectl delete -f nginx-pod.yaml
+kubectl apply -f nginx-pod.yaml
+```
+
+创建新的pod之后，使用`kubectl get pod -o wide`查看pod所处的节点，此时我们在任意工作节点请求该IP，都能成功请求。
+
+### 13.2 安装coredns
+
+#### 13.2.1 下载基础资源配置文件
+
+下载corndns资源配置文件
+
+```bash
+# 下载
+wget https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/coredns.yaml.sed
+# 重命名
+mv coredns.yaml.sed coredns.yaml
+```
+
+#### 13.2.2 修改配置
+
+做出以下修改：
+
+大概第62行，找到配置文件中的`CLUSTER_DOMAIN`、`REVERSE_CIDRS`这两个变量改为集群域名，如下
+
+```yml
+kubernetes cluster.local in-addr.arpa ip6.arpa {
+  fallthrough in-addr.arpa ip6.arpa
+}
+```
+
+大概第66行，`UPSTREAMNAMESERVER`改为宿主机DNS配置`/etc/resolve.conf`，如下
+
+```yaml
+forward . /etc/resolve.conf {
+  max_concurrent 1000
+}
+```
+
+大概在186行，将`CLUSTER_DNS_IP`改为kubelet配置文件中指定的集群IP地址`10.96.0.10`，如下
+
+```yml
+spec:
+  selector:
+    k8s-app: kube-dns
+  clusterIP: 10.96.0.10
+```
+
+#### 13.2.3 启动服务
+
+使用以下命令启动服务
+
+```bash
+kubectl apply -f coredns.yaml
+```
