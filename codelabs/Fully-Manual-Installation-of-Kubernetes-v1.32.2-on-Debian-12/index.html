@@ -1309,6 +1309,137 @@ kubectl label node node-103 node-role.kubernetes.io/node=
 
       </google-codelab-step>
     
+      <google-codelab-step label="十二、安装proxy" duration="0">
+        <h2 is-upgraded>12.1 创建kubeconfig配置文件</h2>
+<p>在<code>k8s-101</code>服务器上执行，如下命令</p>
+<pre><code language="language-bash" class="language-bash"># 进入证书目录
+cd /etc/kubernetes/pki/
+# 创建集群信息
+kubectl config set-cluster kubernetes --certificate-authority=ca.pem --embed-certs=true --server=https://192.168.122.100:7443 --kubeconfig=kube-proxy.kubeconfig
+# 创建用户信息
+kubectl config set-credentials kube-proxy --client-certificate=proxy.pem --client-key=proxy-key.pem --embed-certs=true --kubeconfig=kube-proxy.kubeconfig
+# 创建上下文
+kubectl config set-context default --cluster=kubernetes --user=kube-proxy --kubeconfig=kube-proxy.kubeconfig
+# 应用上下文
+kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig
+# 移动到/etc/kubernetes/
+mv kube-proxy.kubeconfig /etc/kubernetes/
+</code></pre>
+<p>创建完成后，同步到工作节点<code>192-debian</code>和<code>160-debian</code>。</p>
+<h2 is-upgraded>12.2 创建kube-proxy配置文件</h2>
+<p>在工作节点创建<code>/etc/kubernetes/kube-proxy.yaml</code>，内容如下</p>
+<pre><code language="language-bash" class="language-bash">apiVersion: kubeproxy.config.k8s.io/v1alpha1
+bindAddress: 0.0.0.0
+clientConnection:
+  kubeconfig: /etc/kubernetes/kube-proxy.kubeconfig
+clusterCIDR: 10.244.0.0/16 
+kind: KubeProxyConfiguration
+metricsBindAddress: 0.0.0.0:10249
+mode: &#34;ipvs&#34;
+</code></pre>
+<h2 is-upgraded>12.3 创建启动脚本</h2>
+<p>在两台主机执行以上脚本之后，我们创建<code>kube-proxy</code>的启动脚本文件<code>/opt/kubernetes/server/bin/kube-proxy.sh</code></p>
+<pre><code language="language-shell" class="language-shell">#!/bin/bash
+./kube-proxy \
+  --config=/etc/kubernetes/kube-proxy.yaml \
+  --v=2
+</code></pre>
+<p>添加可执行权限</p>
+<pre><code language="language-shell" class="language-shell">chmod +x /opt/kubernetes/server/bin/kube-proxy.sh
+</code></pre>
+<h2 is-upgraded>13.4 创建服务配置</h2>
+<p>创建supervisor的配置文件<code>/etc/supervisor/conf.d/kube-proxy.conf</code>文件，添加以下内容</p>
+<pre><code language="language-ini" class="language-ini">[program:kube-proxy-102]
+directory=/opt/kubernetes/server/bin
+command=/opt/kubernetes/server/bin/kube-proxy.sh
+numprocs=1
+autostart=true
+autorestart=true
+startsecs=30
+startretries=3
+exitcodes=0,2
+stopsignal=QUIT
+stopwaitsecs=10
+user=root
+redirect_stderr=true
+stdout_logfile=/data/logs/supervisor/kube-proxy.stdout.log
+stdout_logfile_maxbytes=64MB
+stdout_logfile_backups=4
+stdout_capture_maxbytes=1MB
+stdout_event_enabled=false
+</code></pre>
+<p>更新supervisor</p>
+<pre><code language="language-shell" class="language-shell">supervisorctl update
+</code></pre>
+<h2 is-upgraded>12.5 创建权限配置文件</h2>
+<p>在<code>k8s-101</code>上创建<code>/etc/kubernetes/rbac.yaml</code>，写入如下内容</p>
+<pre><code language="language-yml" class="language-yml">apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: &#34;true&#34;
+  labels:
+    kubernetes.io/bootstrapping: rbac-defaults
+  name: system:kubernetes-to-kubelet
+rules:
+  - apiGroups:
+      - &#34;&#34;
+    resources:
+      - nodes/proxy
+      - nodes/stats
+      - nodes/log
+      - nodes/spec
+      - nodes/metrics
+    verbs:
+      - &#34;*&#34;
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:kubernetes
+  namespace: &#34;&#34;
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kubernetes-to-kubelet
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: kubernetes
+</code></pre>
+<h2 is-upgraded>12.6 创建角色及授权</h2>
+<pre><code language="language-bash" class="language-bash">kubectl apply -f /etc/kubernetes/rbac.yaml
+</code></pre>
+<h2 is-upgraded>12.7 集群的验证</h2>
+<p>在两个节点都启动好kube-proxy服务之后，至此，集群的基本组件已经安装完成，下面我们来验证集群。在任意管理节点创建一个Pod类型的资源，添加<code>nginx-pod.yml</code>文件，添加以下内容</p>
+<pre><code language="language-yaml" class="language-yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: pod1
+spec:
+  containers:
+  - name: nginx-pod
+    image: nginx:alpine
+    imagePullPolicy: IfNotPresent
+    ports:
+    - name: nginxport
+      containerPort: 80
+</code></pre>
+<p>执行资源创建命令</p>
+<pre><code language="language-shell" class="language-shell">kubectl create -f nginx-pod.yml
+</code></pre>
+<p>使用以下命令验证pod是否正常运行</p>
+<pre><code language="language-shell" class="language-shell">kubectl get pod -o wide
+</code></pre>
+<p>如果返回如下内容，代表集群正常</p>
+<pre><code language="language-shell" class="language-shell">NAME   READY   STATUS    RESTARTS   AGE   IP          NODE       NOMINATED NODE   READINESS GATES
+pod1   1/1     Running   0          94s   10.22.0.2   node-103   &lt;none&gt;           &lt;none&gt;
+</code></pre>
+<p>创建的pod运行在<code>node-103</code>这台主机上，在这台机使用<code>curl 10.22.0.2</code>命令能正常访问到nginx服务。但是如果我们在另一个节点<code>node-102</code>上执行<code>curl 10.22.0.2</code>会发现访问不到。原因是这两个节点上的容器在各自的虚拟网络内，我们将到后续的章节安装通过安装 k8s 网络插件的方式，实现不同工作节点的容器网络互相访问的功能。</p>
+
+
+      </google-codelab-step>
+    
   </google-codelab>
 
   <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
