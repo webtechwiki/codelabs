@@ -1526,7 +1526,7 @@ nerdctl pull registry.aliyuncs.com/google_containers/pause:3.10
 ./kubelet \
     --bootstrap-kubeconfig=/etc/kubernetes/kubelet-bootstrap.conf  \
     --cert-dir=/var/lib/kubelet/pki \
-    --hostname-override=node-102 \
+    --hostname-override=k8s-102 \
     --kubeconfig=/etc/kubernetes/kubelet.kubeconfig \
     --config=/etc/kubernetes/kubelet-config.yaml \
     --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.10 \
@@ -1592,16 +1592,16 @@ kubectl get nodes
 
 ```bash
 NAME       STATUS   ROLES    AGE   VERSION
-node-102   Ready    <none>   19m   v1.32.2
-node-103   Ready    <none>   18m   v1.32.2
+k8s-102   Ready    <none>   19m   v1.32.2
+k8s-103   Ready    <none>   18m   v1.32.2
 ```
 
 我们还可以设置集群的标签
 
 ```bash
 # 设置集群为node标签
-kubectl label node node-102 node-role.kubernetes.io/node=
-kubectl label node node-103 node-role.kubernetes.io/node=
+kubectl label node k8s-102 node-role.kubernetes.io/node=
+kubectl label node k8s-103 node-role.kubernetes.io/node=
 ```
 
 ## 十二、安装proxy
@@ -1771,10 +1771,10 @@ kubectl get pod -o wide
 
 ```shell
 NAME   READY   STATUS    RESTARTS   AGE   IP          NODE       NOMINATED NODE   READINESS GATES
-pod1   1/1     Running   0          94s   10.22.0.2   node-103   <none>           <none>
+pod1   1/1     Running   0          94s   10.22.0.2   k8s-103   <none>           <none>
 ```
 
-创建的pod运行在`node-103`这台主机上，在这台机使用`curl 10.22.0.2`命令能正常访问到nginx服务。但是如果我们在另一个节点`node-102`上执行`curl 10.22.0.2`会发现访问不到。原因是这两个节点上的容器在各自的虚拟网络内，我们将到后续的章节安装通过安装 k8s 网络插件的方式，实现不同工作节点的容器网络互相访问的功能。
+创建的pod运行在`k8s-103`这台主机上，在这台机使用`curl 10.22.0.2`命令能正常访问到nginx服务。但是如果我们在另一个节点`k8s-102`上执行`curl 10.22.0.2`会发现访问不到。原因是这两个节点上的容器在各自的虚拟网络内，我们将到后续的章节安装通过安装 k8s 网络插件的方式，实现不同工作节点的容器网络互相访问的功能。
 
 ## 十三、安装网络插件
 
@@ -1880,3 +1880,135 @@ spec:
 ```bash
 kubectl apply -f coredns.yml
 ```
+
+## 十四、安装traefik
+
+Traefik 在 Kubernetes (k8s) 中的作用主要是作为反向代理和负载均衡器，负责管理外部流量到集群内部服务的路由。我们先定义 traefik 的资源，在`/etc/kubernetes`目录下创建`traefik.yml`文件，添加以下内容
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik-ingress-controller
+  namespace: kube-system
+---
+# 定义角色
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: traefik-ingress-controller
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - endpoints
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+    resources:
+      - ingresses
+      - ingressclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+    resources:
+      - ingresses/status
+    verbs:
+      - update
+---
+# 创建角色和账号绑定
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: traefik-ingress-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traefik-ingress-controller
+subjects:
+  - kind: ServiceAccount
+    name: traefik-ingress-controller
+    namespace: kube-system
+---
+# 创建traefik服务
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: kube-system
+  labels:
+    app: traefik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      serviceAccountName: traefik-ingress-controller
+      containers:
+        - name: traefik
+          image: traefik:v2.10
+          ports:
+            - name: web
+              containerPort: 80
+            - name: websecure
+              containerPort: 443
+            - name: admin
+              containerPort: 8080
+          args:
+            - --api.insecure=true
+            - --providers.kubernetesingress
+            - --entrypoints.web.Address=:80
+            - --entrypoints.websecure.Address=:443
+---
+# 创建traefik的service
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  type: NodePort
+  ports:
+    - name: web
+      port: 80
+      nodePort: 34807
+    - name: websecure
+      port: 443
+      nodePort: 34808
+    - name: admin
+      port: 8080
+      nodePort: 34809
+  selector:
+    app: traefik
+```
+
+基于traefik镜像启动的pod将创建运行三个端口服务，80和443对应ingress本身核心服务，我们后续可以将流量都转发到ingress的80端口，让ingress做流量调度。8080是traefik的控制面板后台服务。
+
+我们定义了3个nodePort类型的service，目的是为了在每个工作节点上提供一个服务入口。后续再将请求负载到各个节点上。创建好配置文件后，执行以下命令启动服务
+
+```shell
+kubectl apply -f traefik.yml
+```
+
+此时我们通过 `kubectl get pod -A -o wide | grep traefik` 命令可以看到如下结果
+
+```shell
+kube-system   traefik-67f7c856c7-2z45k                  1/1     Running   0              32s   10.244.240.11     k8s-103   <none>           <none>
+```
+
+同时不同的工作节点上的34807、34808、34809端口也会有对应的服务，代表3个nodePort类型的service已经启动成功。
