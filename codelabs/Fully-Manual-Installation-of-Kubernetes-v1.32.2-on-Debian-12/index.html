@@ -28,7 +28,7 @@
                   environment="web"
                   feedback-link="">
     
-      <google-codelab-step label="一、基础环境准备" duration="0">
+      <google-codelab-step label="基础环境准备" duration="0">
         <h2 is-upgraded>1.1 kubernetes集群包含的组件</h2>
 <p>Kubernetes 集群由 **Master 节点（控制平面）**和 **Node 节点（工作节点）**组成，各自包含以下核心组件：</p>
 <h3 is-upgraded>1.1.1 Master节点组件</h3>
@@ -150,7 +150,7 @@ EOF
 
       </google-codelab-step>
     
-      <google-codelab-step label="二、安装containerd" duration="0">
+      <google-codelab-step label="安装containerd" duration="0">
         <p>containerd的下载网址为<a href="https://containerd.io/downloads/" target="_blank">https://containerd.io/downloads/</a>，在撰写文章时（2025.02.15）最新版本是<code>v2.0.2</code>，安装到三台机器作为容器运行时环境，分别执行以下操作</p>
 <h2 is-upgraded>2.1 安装 containerd</h2>
 <p>从 <a href="https://github.com/containerd/containerd/releases" target="_blank">https://github.com/containerd/containerd/releases</a> 下载 <code>containerd-<版本>-<操作系统>-<架构>.tar.gz</code> 存档，验证其 sha256sum，并将其解压到 <code>/usr/local</code> 目录下</p>
@@ -278,7 +278,7 @@ containerd config default &gt; /etc/containerd/config.toml
 
       </google-codelab-step>
     
-      <google-codelab-step label="三、签发SSL证书" duration="0">
+      <google-codelab-step label="签发SSL证书" duration="0">
         <h2 is-upgraded>3.1 安装证书工具</h2>
 <p><code>cfssl</code> 系列工具是 Cloudflare 提供的 PKI/TLS 工具，用于证书管理。可以在 <a href="https://github.com/cloudflare/cfssl" target="_blank">https://github.com/cloudflare/cfssl</a> 找到对应的信息，在撰写文章时版本是 <code>1.6.6</code>，我们下载对应操作系统的版本，安装到 <code>k8s-101</code> 这台主机，以 linux amd64 为例安装命令如下</p>
 <pre><code language="language-shell" class="language-shell">wget https://github.com/cloudflare/cfssl/releases/download/v1.6.5/cfssl_1.6.5_linux_amd64 -o /usr/local/bin/cfssl
@@ -559,7 +559,7 @@ EOF
 
       </google-codelab-step>
     
-      <google-codelab-step label="四、安装etcd" duration="0">
+      <google-codelab-step label="安装etcd" duration="0">
         <p>我们将使用<code>k8s-101</code>、<code>k8s-102</code>、<code>k8s-103</code>这三台主机搭建ectd集群。在撰写此文档时（2425.02.18），etcd最新稳定版本是 <code>3.5.18</code>，可以从 <a href="https://github.com/etcd-io/etcd/releases/" target="_blank">https://github.com/etcd-io/etcd/releases/</a> 这个链接下载对应的安装包。</p>
 <h2 is-upgraded>4.1 etcd启动参数</h2>
 <p>常见参数说明说下</p>
@@ -735,7 +735,7 @@ tcp        0      0 192.168.122.101:2380      0.0.0.0:*               LISTEN    
 
       </google-codelab-step>
     
-      <google-codelab-step label="五、将kubernetes二进制安装包解压到系统中" duration="0">
+      <google-codelab-step label="将kubernetes二进制安装包解压到系统中" duration="0">
         <p>在撰写这个文档时，kubernetes最新稳定版本为<code>v1.32.2</code>，所以这里也采用这个版本。通过 <a href="https://kubernetes.io/zh-cn/releases/" target="_blank">https://kubernetes.io/zh-cn/releases/</a> 下载最新的对应操作系统的稳定版本。</p>
 <p>我们下载好对应的 &#34;Server Binarie&#34; 之后，在所有k8s主机上执行安装，如下步骤</p>
 <pre><code language="language-shell" class="language-shell"># 解压安装包
@@ -757,7 +757,7 @@ rm -rf server/bin/*.tar
 
       </google-codelab-step>
     
-      <google-codelab-step label="六、安装apiserver" duration="0">
+      <google-codelab-step label="安装apiserver" duration="0">
         <p>搭建好etcd数据库集群之后，我们就可以安装apiserver组件了，在所有主机上安装apiserver，以下是具体的安装过程。</p>
 <h2 is-upgraded>6.1 创建kubelet授权用户</h2>
 <p>因为后面要配置kubelet的bootstrap认证，即kubelet启动时自动创建CSR请求，这里需要在apiserver上开启token的认证。所以先在master上生成一个随机值作为token。下面在一台主机操作即可</p>
@@ -869,7 +869,7 @@ stdout_event_enabled=false
 
       </google-codelab-step>
     
-      <google-codelab-step label="七、搭建L4层负载均衡" duration="0">
+      <google-codelab-step label="搭建L4层负载均衡" duration="0">
         <p>负载均衡是网络层的一种机制，它将请求分发到后端服务器，从而实现高可用和高性能。负载均衡器通常包含一个或多个负载均衡器，每个负载均衡器负责将请求分发到后端服务器。负载均衡器通常使用TCP或UDP协议进行通信，并通过网络层（如TCP或UDP）将请求分发到后端服务器。负载均衡器通常使用轮询、权重、会话保持等功能来优化请求分发。</p>
 <p>现在，我们需要在<code>k8s-101</code>和<code>k8s-102</code>上安装nginx作为反向代理服务且两个服务实现负载均衡，再使用keepalived保证高可用性</p>
 <h2 is-upgraded>7.1 安装nginx</h2>
@@ -1074,7 +1074,7 @@ systemctl enable keepalived
 
       </google-codelab-step>
     
-      <google-codelab-step label="八、安装controller-manager" duration="0">
+      <google-codelab-step label="安装controller-manager" duration="0">
         <h2 is-upgraded>8.1 创建kubectl链接</h2>
 <p><code>kubectl</code> 是k8s的管理工具，我们创建一个软链接，方便后续使用，如下</p>
 <pre><code language="language-shell" class="language-shell">ln -s /opt/kubernetes/server/bin/kubectl /usr/local/bin/kubectl
@@ -1148,7 +1148,7 @@ stdout_event_enabled=false
 
       </google-codelab-step>
     
-      <google-codelab-step label="九、安装scheduler" duration="0">
+      <google-codelab-step label="安装scheduler" duration="0">
         <h2 is-upgraded>9.1 创建配置</h2>
 <p>scheduler 和 apiserver 之间的认证也是通过 kubeconfig 的方式来认证的，下面创建 scheduler 所用的 kubeconfig 文件 kube-scheduler.kubeconfig，现在在/etc/kubernetes/pki里创建，然后剪切到/etc/kubernetes里。</p>
 <pre><code language="language-bash" class="language-bash"># 进入证书目录
@@ -1205,7 +1205,7 @@ stdout_event_enabled=false
 
       </google-codelab-step>
     
-      <google-codelab-step label="十、集群验证" duration="0">
+      <google-codelab-step label="集群验证" duration="0">
         <h2 is-upgraded>10.1 创建管理员配置</h2>
 <p>创建管理员用户用的kubeconfig，最后拷贝为 <code>~/.kube/config</code> 作为默认的kubeconfig文件。</p>
 <pre><code language="language-bash" class="language-bash"># 进入证书目录
@@ -1245,7 +1245,7 @@ etcd-0               Healthy   ok
 
       </google-codelab-step>
     
-      <google-codelab-step label="十一、安装kubelet" duration="0">
+      <google-codelab-step label="安装kubelet" duration="0">
         <h2 is-upgraded>11.1 创建授权配置文件</h2>
 <p>为用户 <code>kubelet-bootstrap</code> 授权，允许 <code>kubelet tls bootstrap</code> 创建 <code>CSR</code> 请求，执行如下命令</p>
 <pre><code language="language-bash" class="language-bash">kubectl create clusterrolebinding kubelet-bootstrap1 --clusterrole=system:node-bootstrapper --user=kubelet-bootstrap
@@ -1365,7 +1365,7 @@ kubectl label node k8s-103 node-role.kubernetes.io/node=
 
       </google-codelab-step>
     
-      <google-codelab-step label="十二、安装proxy" duration="0">
+      <google-codelab-step label="安装proxy" duration="0">
         <h2 is-upgraded>12.1 创建kubeconfig配置文件</h2>
 <p>在<code>k8s-101</code>服务器上执行，如下命令</p>
 <pre><code language="language-bash" class="language-bash"># 进入证书目录
@@ -1498,7 +1498,7 @@ pod1   1/1     Running   0          94s   10.22.0.2   k8s-103   &lt;none&gt;    
 
       </google-codelab-step>
     
-      <google-codelab-step label="十三、安装网络插件" duration="0">
+      <google-codelab-step label="安装网络插件" duration="0">
         <p>以下的操作，我们在<code>k8s-101</code>节点去完成。</p>
 <h2 is-upgraded>13.1 安装calico</h2>
 <p>Calico 是 Kubernetes 集群的网络基础设施，负责 Pod 的网络连接、跨节点通信和网络策略管理。根据以下步骤进行安装。</p>
@@ -1565,7 +1565,7 @@ wget https://github.com/kubernetes/kubernetes/blob/master/cluster/addons/dns/cor
 
       </google-codelab-step>
     
-      <google-codelab-step label="十四、安装traefik-ingress" duration="0">
+      <google-codelab-step label="安装traefik-ingress" duration="0">
         <h2 is-upgraded>14.1 启动traefik服务</h2>
 <p>Traefik 在 Kubernetes (k8s) 中的作用主要是作为反向代理和负载均衡器，负责管理外部流量到集群内部服务的路由。我们先定义 traefik 的资源，在<code>/etc/kubernetes</code>目录下创建<code>traefik.yml</code>文件，添加以下内容</p>
 <pre><code language="language-yaml" class="language-yaml">apiVersion: v1
@@ -1767,7 +1767,7 @@ server {
 
       </google-codelab-step>
     
-      <google-codelab-step label="十五、部署web服务" duration="0">
+      <google-codelab-step label="部署web服务" duration="0">
         <p>在本节中，我们将部署一个简单的web服务，并通过<code>ingress</code>资源来发布到集群中。</p>
 <h2 is-upgraded>15.1 概述</h2>
 <p>部署k8s通常包含以下几个步骤</p>

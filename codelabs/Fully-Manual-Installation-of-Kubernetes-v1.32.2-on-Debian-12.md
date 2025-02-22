@@ -8,7 +8,7 @@ Feedback Link: <https://github.com/webtechwiki/codelabs/issues>
 
 # 在 Debian 12 上完全手动安装 kubernetes v1.32.2
 
-## 一、基础环境准备
+## 基础环境准备
 
 ### 1.1 kubernetes集群包含的组件
 
@@ -119,7 +119,7 @@ swapoff -a
 swapoff -a
 ```
 
-## 二、安装containerd
+## 安装containerd
 
 containerd的下载网址为<https://containerd.io/downloads/>，在撰写文章时（2025.02.15）最新版本是`v2.0.2`，安装到三台机器作为容器运行时环境，分别执行以下操作
 
@@ -269,7 +269,7 @@ containerd config default > /etc/containerd/config.toml
 systemctl restart containerd
 ```
 
-## 三、签发SSL证书
+## 签发SSL证书
 
 ### 3.1 安装证书工具
 
@@ -603,7 +603,7 @@ cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www 
 
 生成证书之后，将证书目录`/etc/kubernetes/pki`同步到其他主机。
 
-## 四、安装etcd
+## 安装etcd
 
 我们将使用`k8s-101`、`k8s-102`、`k8s-103`这三台主机搭建ectd集群。在撰写此文档时（2425.02.18），etcd最新稳定版本是 `3.5.18`，可以从 <https://github.com/etcd-io/etcd/releases/> 这个链接下载对应的安装包。
 
@@ -797,7 +797,7 @@ etcdctl get name
 
 如果需要了解`etcdctl`这个指令的更多用法，使用`--help`参数即可查看。
 
-## 五、将kubernetes二进制安装包解压到系统中
+## 将kubernetes二进制安装包解压到系统中
 
 在撰写这个文档时，kubernetes最新稳定版本为`v1.32.2`，所以这里也采用这个版本。通过 <https://kubernetes.io/zh-cn/releases/> 下载最新的对应操作系统的稳定版本。
 
@@ -823,7 +823,7 @@ rm kubernetes-src.tar.gz
 rm -rf server/bin/*.tar
 ```
 
-## 六、安装apiserver
+## 安装apiserver
 
 搭建好etcd数据库集群之后，我们就可以安装apiserver组件了，在所有主机上安装apiserver，以下是具体的安装过程。
 
@@ -959,7 +959,7 @@ supervisorctl update
 
 此时，还可以使用`netstat -luntp | grep kube-api`命令查看网络服务的端口是否正常，如果正常，将返回如下内容
 
-## 七、搭建L4层负载均衡
+## 搭建L4层负载均衡
 
 负载均衡是网络层的一种机制，它将请求分发到后端服务器，从而实现高可用和高性能。负载均衡器通常包含一个或多个负载均衡器，每个负载均衡器负责将请求分发到后端服务器。负载均衡器通常使用TCP或UDP协议进行通信，并通过网络层（如TCP或UDP）将请求分发到后端服务器。负载均衡器通常使用轮询、权重、会话保持等功能来优化请求分发。
 
@@ -1216,7 +1216,7 @@ systemctl start keepalived
 
 再次检查虚拟 IP 是否切换回主服务器。如果以上操作正常，则说明 Keepalived 的高可用性已经实现，否则需要检查安装过程以及 Keepalived 的配置文件，确保所有参数设置正确。
 
-## 八、安装controller-manager
+## 安装controller-manager
 
 ### 8.1 创建kubectl链接
 
@@ -1310,7 +1310,7 @@ stdout_event_enabled=false
 supervisorctl update
 ```
 
-## 九、安装scheduler
+## 安装scheduler
 
 ### 9.1 创建配置
 
@@ -1382,7 +1382,7 @@ stdout_event_enabled=false
 supervisorctl update
 ```
 
-## 十、集群验证
+## 集群验证
 
 ### 10.1 创建管理员配置
 
@@ -1437,7 +1437,7 @@ etcd-0               Healthy   ok
 
 不过这个命令将来可能会被废弃，目前也可以使用 `kubectl cluster-info` 命令查看 Kubernetes 集群的基本信息。
 
-## 十一、安装kubelet
+## 安装kubelet
 
 ### 11.1 创建授权配置文件
 
@@ -1601,7 +1601,7 @@ kubectl label node k8s-102 node-role.kubernetes.io/node=
 kubectl label node k8s-103 node-role.kubernetes.io/node=
 ```
 
-## 十二、安装proxy
+## 安装proxy
 
 ### 12.1 创建kubeconfig配置文件
 
@@ -1777,7 +1777,7 @@ pod1   1/1     Running   0          94s   10.22.0.2   k8s-103   <none>          
 
 创建的pod运行在`k8s-103`这台主机上，在这台机使用`curl 10.22.0.2`命令能正常访问到nginx服务。但是如果我们在另一个节点`k8s-102`上执行`curl 10.22.0.2`会发现访问不到。原因是这两个节点上的容器在各自的虚拟网络内，我们将到后续的章节安装通过安装 k8s 网络插件的方式，实现不同工作节点的容器网络互相访问的功能。
 
-## 十三、安装网络插件
+## 安装网络插件
 
 以下的操作，我们在`k8s-101`节点去完成。
 
@@ -1882,7 +1882,7 @@ spec:
 kubectl apply -f coredns.yml
 ```
 
-## 十四、安装traefik-ingress
+## 安装traefik-ingress
 
 ### 14.1 启动traefik服务
 
@@ -2092,7 +2092,7 @@ server {
 
 至此，集群的核心组件和核心插件已经全部安装完毕。
 
-## 十五、部署web服务
+## 部署web服务
 
 在本节中，我们将部署一个简单的web服务，并通过`ingress`资源来发布到集群中。
 
