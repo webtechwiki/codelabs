@@ -3,7 +3,7 @@
   "format": "html",
   "prefix": "https://storage.googleapis.com",
   "mainga": "UA-49880327-14",
-  "updated": "2025-02-22T23:07:00+08:00",
+  "updated": "2025-02-23T01:54:26+08:00",
   "id": "Fully-Manual-Installation-of-Kubernetes-v1.32.2-on-Debian-12",
   "duration": 0,
   "title": "在 Debian 12 上完全手动安装 kubernetes v1.32.2",
@@ -20,6 +20,5 @@
   "tags": [
     "cloud"
   ],
-  "feedback": "https://github.com/webtechwiki/codelabs/issues",
   "url": "Fully-Manual-Installation-of-Kubernetes-v1.32.2-on-Debian-12"
 }

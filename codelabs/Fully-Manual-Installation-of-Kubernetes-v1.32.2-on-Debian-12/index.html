@@ -26,7 +26,7 @@
                   id="Fully-Manual-Installation-of-Kubernetes-v1.32.2-on-Debian-12"
                   title="在 Debian 12 上完全手动安装 kubernetes v1.32.2"
                   environment="web"
-                  feedback-link="https://github.com/webtechwiki/codelabs/issues">
+                  feedback-link="">
     
       <google-codelab-step label="一、基础环境准备" duration="0">
         <h2 is-upgraded>1.1 kubernetes集群包含的组件</h2>
@@ -1565,8 +1565,9 @@ wget https://github.com/kubernetes/kubernetes/blob/master/cluster/addons/dns/cor
 
       </google-codelab-step>
     
-      <google-codelab-step label="十四、安装traefik" duration="0">
-        <p>Traefik 在 Kubernetes (k8s) 中的作用主要是作为反向代理和负载均衡器，负责管理外部流量到集群内部服务的路由。我们先定义 traefik 的资源，在<code>/etc/kubernetes</code>目录下创建<code>traefik.yml</code>文件，添加以下内容</p>
+      <google-codelab-step label="十四、安装traefik-ingress" duration="0">
+        <h2 is-upgraded>14.1 启动traefik服务</h2>
+<p>Traefik 在 Kubernetes (k8s) 中的作用主要是作为反向代理和负载均衡器，负责管理外部流量到集群内部服务的路由。我们先定义 traefik 的资源，在<code>/etc/kubernetes</code>目录下创建<code>traefik.yml</code>文件，添加以下内容</p>
 <pre><code language="language-yaml" class="language-yaml">apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -1665,15 +1666,15 @@ metadata:
 spec:
   type: NodePort
   ports:
-    - name: web
+    - name: http
       port: 80
-      nodePort: 34807
-    - name: websecure
+      nodePort: 58180
+    - name: https
       port: 443
-      nodePort: 34808
-    - name: admin
+      nodePort: 58181
+    - name: dashboard
       port: 8080
-      nodePort: 34809
+      nodePort: 58182
   selector:
     app: traefik
 </code></pre>
@@ -1681,10 +1682,173 @@ spec:
 <p>我们定义了3个nodePort类型的service，目的是为了在每个工作节点上提供一个服务入口。后续再将请求负载到各个节点上。创建好配置文件后，执行以下命令启动服务</p>
 <pre><code language="language-shell" class="language-shell">kubectl apply -f traefik.yml
 </code></pre>
-<p>此时我们通过 <code>kubectl get pod -A -o wide | grep traefik</code> 命令可以看到如下结果</p>
-<pre><code language="language-shell" class="language-shell">kube-system   traefik-67f7c856c7-2z45k                  1/1     Running   0              32s   10.244.240.11     k8s-103   &lt;none&gt;           &lt;none&gt;
+<p>此时我们通过 <code>kubectl get svc -A -o wide | grep traefik</code> 命令可以看到如下结果</p>
+<pre><code language="language-shell" class="language-shell">kube-system   traefik      NodePort    10.96.71.38   &lt;none&gt;        80:58180/TCP,443:58181/TCP,8080:58182/TCP   116s
 </code></pre>
-<p>同时不同的工作节点上的34807、34808、34809端口也会有对应的服务，代表3个nodePort类型的service已经启动成功。</p>
+<p>我们可以使用<code>ipvsadm -L</code>查看所有端口映射关系，现在我们在浏览器访问不同的工作节点上IP的<code>58180</code>端口，都会看到traefik的管理页面，代表安装成功。我们可以看到，集群节点端口与trafik端口的对应关系如下：</p>
+<table>
+<tr><td colspan="1" rowspan="1"><p>集群节点端口</p>
+</td><td colspan="1" rowspan="1"><p>Traefik端口</p>
+</td></tr>
+<tr><td colspan="1" rowspan="1"><p>58180</p>
+</td><td colspan="1" rowspan="1"><p>80</p>
+</td></tr>
+<tr><td colspan="1" rowspan="1"><p>58181</p>
+</td><td colspan="1" rowspan="1"><p>443</p>
+</td></tr>
+<tr><td colspan="1" rowspan="1"><p>58182</p>
+</td><td colspan="1" rowspan="1"><p>8080</p>
+</td></tr>
+</table>
+<p>集群节点的端口由我们自定义，而traefik的8080端口是控制面板端口，80和443则是常见web服务的默认端口。</p>
+<h2 is-upgraded>14.2 配置负载均衡</h2>
+<p>我们在<code>k8s-101</code>、<code>k8s-102</code>节点上分别创建了nginx服务，现在我们将流量转发到这2个工作节点上，假设我们的业务服务器是<code>algs.tech</code>，在<code>nginx</code>服务器添加以下配置</p>
+<pre><code language="language-ini" class="language-ini">upstream traefik_dashboard {
+    server 192.168.122.102:58182    max_fails=3 fail_timeout=10s;
+    server 192.168.122.103:58182    max_fails=3 fail_timeout=10s;
+}
+
+server {
+    server_name traefik.algs.tech;
+
+    location / {
+        proxy_pass http://traefik_dashboard;
+        proxy_set_header Host       $http_host;
+        proxy_set_header x-forwarded-for $proxy_add_x_forwarded_for;
+    }
+}
+
+
+upstream traefik_http {
+    server 192.168.122.102:58180    max_fails=3 fail_timeout=10s;
+    server 192.168.122.103:58180    max_fails=3 fail_timeout=10s;
+}
+
+server {
+    server_name *.algs.tech;
+    listen 80;
+
+    location / {
+        proxy_pass http://traefik_http;
+        proxy_set_header Host       $http_host;
+        proxy_set_header x-forwarded-for $proxy_add_x_forwarded_for;
+    }
+}
+
+upstream traefik_https {
+    server 192.168.122.102:58181    max_fails=3 fail_timeout=10s;
+    server 192.168.122.103:58181    max_fails=3 fail_timeout=10s;
+}
+
+server {
+    server_name *.algs.tech;
+    listen 443 ssl;
+
+    # ssl证书
+    ssl_certificate /etc/certs/ssl/algs.tech/fullchain.pem;
+    ssl_certificate_key /etc/certs/ssl/algs.tech/key.pem;
+    ssl_session_timeout     5m;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_session_cache shared:SSL:10m;
+    ssl_prefer_server_ciphers on;
+
+    location / {
+        proxy_pass http://traefik_https;
+        proxy_set_header Host       $http_host;
+        proxy_set_header x-forwarded-for $proxy_add_x_forwarded_for;
+    }
+}
+</code></pre>
+<p>在以上配置中，我们把<code>traefik.algs.tech</code>的请求转发到traefik的控制面板。同时，我们把<code>*.algs.tech</code>的所有80端口和443端口的流量转发到集群对应的traefik服务，由traefik来调度，后续发布服务我们只需要配置好 <code>ingress</code> 资源即可。</p>
+<p>至此，集群的核心组件和核心插件已经全部安装完毕。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="十五、部署web服务" duration="0">
+        <p>在本节中，我们将部署一个简单的web服务，并通过<code>ingress</code>资源来发布到集群中。</p>
+<h2 is-upgraded>15.1 概述</h2>
+<p>部署k8s通常包含以下几个步骤</p>
+<ul>
+<li>1.准备项目镜像，用于启动应用容器</li>
+<li>2.通常创建Deployment资源的方式运行应用</li>
+<li>3.创建应用的Service网络，用于关联Deployment</li>
+<li>4.创建对应的Ingress资源，用于调度7层流量</li>
+</ul>
+<p>在下文，我们使用声明式的管理方式（通常指通过yaml配置文件来管理集群）来创建各个集群资源，完成应用部署。</p>
+<h2 is-upgraded>15.2 准备资源配置文件</h2>
+<p>我们通过部署tomcat来演示一个应用在k8s部署的流程</p>
+<h3 is-upgraded>15.2.1 声明deployment</h3>
+<p>创建<code>whoami.yml</code>文件，添加以下内容</p>
+<pre><code language="language-yaml" class="language-yaml">kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: whoami
+  labels:
+    app: whoami
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whoami
+  template:
+    metadata:
+      labels:
+        app: whoami
+    spec:
+      containers:
+        - name: whoami
+          image: nginx
+          ports:
+            - name: web
+              containerPort: 80
+</code></pre>
+<h3 is-upgraded>15.2.2 声明service</h3>
+<p>创建<code>whoami-services.yml</code>文件，添加以下内容</p>
+<pre><code language="language-yml" class="language-yml">apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+
+spec:
+  ports:
+    - name: web
+      port: 80
+      targetPort: web
+
+  selector:
+    app: whoami
+</code></pre>
+<h3 is-upgraded>15.2.3 声明ingress</h3>
+<p>创建<code>whoami-ingress.yml</code>，添加以下内容</p>
+<pre><code language="language-yml" class="language-yml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whoami-ingress
+spec:
+  rules:
+  - host: nginx.algs.tech
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: whoami
+            port:
+              name: web
+</code></pre>
+<h2 is-upgraded>15.3 资源创建与验证</h2>
+<p>创建各个资源</p>
+<pre><code language="language-bash" class="language-bash">kubectl apply -f whoami.yml \
+              -f whoami-services.yml \
+              -f whoami-ingress.yml
+</code></pre>
+<p>执行以上命令之后，k8s将会拉取tomcat的镜像，并按我们指定的配置去启动服务。</p>
+<p>启动完成之后，我们在自己的桌面操作系统的电脑上将<code>nginx.algs.tech</code>域名解析到在前面通过 <code>keepalived</code> 创建的虚拟IP <code>192.168.122.100</code>，再使用浏览器访问域名，就顺利访问到了nginx的首页了。</p>
 
 
       </google-codelab-step>

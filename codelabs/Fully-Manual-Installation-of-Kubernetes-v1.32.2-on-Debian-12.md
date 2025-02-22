@@ -4,7 +4,7 @@ categories: cloud
 tags: cloud
 status: Published
 authors: panhy
-Feedback Link: https://github.com/webtechwiki/codelabs/issues
+Feedback Link: <https://github.com/webtechwiki/codelabs/issues>
 
 # 在 Debian 12 上完全手动安装 kubernetes v1.32.2
 
@@ -1882,7 +1882,9 @@ spec:
 kubectl apply -f coredns.yml
 ```
 
-## 十四、安装traefik
+## 十四、安装traefik-ingress
+
+### 14.1 启动traefik服务
 
 Traefik 在 Kubernetes (k8s) 中的作用主要是作为反向代理和负载均衡器，负责管理外部流量到集群内部服务的路由。我们先定义 traefik 的资源，在`/etc/kubernetes`目录下创建`traefik.yml`文件，添加以下内容
 
@@ -1985,15 +1987,15 @@ metadata:
 spec:
   type: NodePort
   ports:
-    - name: web
+    - name: http
       port: 80
-      nodePort: 34807
-    - name: websecure
+      nodePort: 58180
+    - name: https
       port: 443
-      nodePort: 34808
-    - name: admin
+      nodePort: 58181
+    - name: dashboard
       port: 8080
-      nodePort: 34809
+      nodePort: 58182
   selector:
     app: traefik
 ```
@@ -2006,10 +2008,192 @@ spec:
 kubectl apply -f traefik.yml
 ```
 
-此时我们通过 `kubectl get pod -A -o wide | grep traefik` 命令可以看到如下结果
+此时我们通过 `kubectl get svc -A -o wide | grep traefik` 命令可以看到如下结果
 
 ```shell
-kube-system   traefik-67f7c856c7-2z45k                  1/1     Running   0              32s   10.244.240.11     k8s-103   <none>           <none>
+kube-system   traefik      NodePort    10.96.71.38   <none>        80:58180/TCP,443:58181/TCP,8080:58182/TCP   116s
 ```
 
-同时不同的工作节点上的34807、34808、34809端口也会有对应的服务，代表3个nodePort类型的service已经启动成功。
+我们可以使用`ipvsadm -L`查看所有端口映射关系，现在我们在浏览器访问不同的工作节点上IP的`58180`端口，都会看到traefik的管理页面，代表安装成功。我们可以看到，集群节点端口与trafik端口的对应关系如下：
+
+| 集群节点端口 | Traefik端口 |
+| ------------ | ----------- |
+| 58180        | 80          |
+| 58181        | 443         |
+| 58182        | 8080        |
+
+集群节点的端口由我们自定义，而traefik的8080端口是控制面板端口，80和443则是常见web服务的默认端口。
+
+### 14.2 配置负载均衡
+
+我们在`k8s-101`、`k8s-102`节点上分别创建了nginx服务，现在我们将流量转发到这2个工作节点上，假设我们的业务服务器是`algs.tech`，在`nginx`服务器添加以下配置
+
+```ini
+upstream traefik_dashboard {
+    server 192.168.122.102:58182    max_fails=3 fail_timeout=10s;
+    server 192.168.122.103:58182    max_fails=3 fail_timeout=10s;
+}
+
+server {
+    server_name traefik.algs.tech;
+
+    location / {
+        proxy_pass http://traefik_dashboard;
+        proxy_set_header Host       $http_host;
+        proxy_set_header x-forwarded-for $proxy_add_x_forwarded_for;
+    }
+}
+
+
+upstream traefik_http {
+    server 192.168.122.102:58180    max_fails=3 fail_timeout=10s;
+    server 192.168.122.103:58180    max_fails=3 fail_timeout=10s;
+}
+
+server {
+    server_name *.algs.tech;
+    listen 80;
+
+    location / {
+        proxy_pass http://traefik_http;
+        proxy_set_header Host       $http_host;
+        proxy_set_header x-forwarded-for $proxy_add_x_forwarded_for;
+    }
+}
+
+upstream traefik_https {
+    server 192.168.122.102:58181    max_fails=3 fail_timeout=10s;
+    server 192.168.122.103:58181    max_fails=3 fail_timeout=10s;
+}
+
+server {
+    server_name *.algs.tech;
+    listen 443 ssl;
+
+    # ssl证书
+    ssl_certificate /etc/certs/ssl/algs.tech/fullchain.pem;
+    ssl_certificate_key /etc/certs/ssl/algs.tech/key.pem;
+    ssl_session_timeout     5m;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_session_cache shared:SSL:10m;
+    ssl_prefer_server_ciphers on;
+
+    location / {
+        proxy_pass http://traefik_https;
+        proxy_set_header Host       $http_host;
+        proxy_set_header x-forwarded-for $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+在以上配置中，我们把`traefik.algs.tech`的请求转发到traefik的控制面板。同时，我们把`*.algs.tech`的所有80端口和443端口的流量转发到集群对应的traefik服务，由traefik来调度，后续发布服务我们只需要配置好 `ingress` 资源即可。
+
+至此，集群的核心组件和核心插件已经全部安装完毕。
+
+## 十五、部署web服务
+
+在本节中，我们将部署一个简单的web服务，并通过`ingress`资源来发布到集群中。
+
+### 15.1 概述
+
+部署k8s通常包含以下几个步骤
+
+- 1.准备项目镜像，用于启动应用容器
+- 2.通常创建Deployment资源的方式运行应用
+- 3.创建应用的Service网络，用于关联Deployment
+- 4.创建对应的Ingress资源，用于调度7层流量
+
+在下文，我们使用声明式的管理方式（通常指通过yaml配置文件来管理集群）来创建各个集群资源，完成应用部署。
+
+### 15.2 准备资源配置文件
+
+我们通过部署tomcat来演示一个应用在k8s部署的流程
+
+#### 15.2.1 声明deployment
+
+创建`whoami.yml`文件，添加以下内容
+
+```yaml
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: whoami
+  labels:
+    app: whoami
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whoami
+  template:
+    metadata:
+      labels:
+        app: whoami
+    spec:
+      containers:
+        - name: whoami
+          image: nginx
+          ports:
+            - name: web
+              containerPort: 80
+```
+
+#### 15.2.2 声明service
+
+创建`whoami-services.yml`文件，添加以下内容
+
+```yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+
+spec:
+  ports:
+    - name: web
+      port: 80
+      targetPort: web
+
+  selector:
+    app: whoami
+```
+
+#### 15.2.3 声明ingress
+
+创建`whoami-ingress.yml`，添加以下内容
+
+```yml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whoami-ingress
+spec:
+  rules:
+  - host: nginx.algs.tech
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: whoami
+            port:
+              name: web
+```
+
+### 15.3 资源创建与验证
+
+创建各个资源
+
+```bash
+kubectl apply -f whoami.yml \
+              -f whoami-services.yml \
+              -f whoami-ingress.yml
+```
+
+执行以上命令之后，k8s将会拉取tomcat的镜像，并按我们指定的配置去启动服务。
+
+启动完成之后，我们在自己的桌面操作系统的电脑上将`nginx.algs.tech`域名解析到在前面通过 `keepalived` 创建的虚拟IP `192.168.122.100`，再使用浏览器访问域名，就顺利访问到了nginx的首页了。
