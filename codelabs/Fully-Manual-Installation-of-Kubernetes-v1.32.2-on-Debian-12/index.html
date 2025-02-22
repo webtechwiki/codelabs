@@ -1298,6 +1298,7 @@ healthzBindAddress: 127.0.0.1
 httpCheckFrequency: 0s
 imageMinimumGCAge: 0s
 kind: KubeletConfiguration
+podInfraContainerImage: &#34;registry.aliyuncs.com/google_containers/pause:3.10&#34;
 </code></pre>
 <p>这里我们指定clusterDNS的IP是<code>10.96.0.10</code>，后续我们会在<code>kube-dns</code>中配置<code>CoreDNS</code>的IP为<code>10.96.0.10</code>。</p>
 <h2 is-upgraded>11.3 配置kubelet启动脚本</h2>
@@ -1313,10 +1314,6 @@ kind: KubeletConfiguration
     --hostname-override=k8s-102 \
     --kubeconfig=/etc/kubernetes/kubelet.kubeconfig \
     --config=/etc/kubernetes/kubelet-config.yaml \
-    --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.10 \
-    --container-runtime=remote \
-    --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \
-    --runtime-request-timeout=15m \
     --v=2
 </code></pre>
 <p>添加可执行权限</p>
@@ -1431,6 +1428,8 @@ stdout_event_enabled=false
 <pre><code language="language-shell" class="language-shell">supervisorctl update
 </code></pre>
 <h2 is-upgraded>12.5 创建权限配置文件</h2>
+<p><code>kube-proxy</code> 是 Kubernetes 集群中的一个核心组件，负责在每个节点上维护网络规则，确保 Pod 之间的网络通信。为了实现这一功能，<code>kube-proxy</code> 需要与 Kubernetes API Server 进行交互，获取集群的网络信息（如 Service、Endpoint 等），并根据这些信息配置本地的网络规则（如 iptables 或 ipvs）。为了与 API Server 交互，<code>kube-proxy</code> 需要一定的权限，特别是访问节点资源的权限。</p>
+<p>RBAC（基于角色的访问控制）是 Kubernetes 中用于管理权限的机制。通过创建 RBAC 配置，<code>kube-proxy</code> 被授予了以下权限：访问 nodes/proxy、nodes/stats、nodes/log 等资源，以便获取节点的网络和状态信息。执行相关操作（如 get、list、watch 等）来维护网络规则。如果没有这些权限，<code>kube-proxy</code> 将无法正常工作，导致集群中的网络功能失效。因此，启动 <code>kube-proxy</code> 之后创建 RBAC 配置是必要的。</p>
 <p>在<code>k8s-101</code>上创建<code>/etc/kubernetes/rbac.yaml</code>，写入如下内容</p>
 <pre><code language="language-yml" class="language-yml">apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
