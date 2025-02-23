@@ -1104,31 +1104,23 @@ chmod +x /etc/keepalived/check_port.sh
 
 ```shell
 ! Configuration File for keepalived
-global_defs {
-   router_id 192.168.122.101
 
-vrrp_script check_nginx {
-    script "/etc/keepalived/check_port.sh 7443"
-    interval 2
-    weight -20
+# 全局配置global_defs {
+   router_id 192.168.122.101  # 当前服务器的唯一标识，通常用 IP 地址或主机名}
+
+# 定义健康检查脚本vrrp_script check_nginx {
+    script "/etc/keepalived/check_port.sh 7443"  # 检查端口 7443 是否在监听的脚本    interval 2  # 每隔 2 秒执行一次脚本    weight -20  # 如果脚本检查失败，当前服务器的优先级降低 20
 }
 
-vrrp_instance VI_1 {
-    state MASTER
-    interface enp1s0
-    virtual_router_id 251
-    priority 100
-    advert_int 1
-    mcast_src_ip 192.168.122.101
-    nopreempt
+# 定义一个 VRRP 实例vrrp_instance VI_1 {
+    state MASTER  # 当前服务器的初始状态是 MASTER（主服务器）    interface enp1s0  # 绑定虚拟 IP 的网络接口    virtual_router_id 251  # VRRP 实例的唯一 ID，范围是 1-255
+    priority 100  # 当前服务器的优先级，数值越大优先级越高    advert_int 1  # 每隔 1 秒发送一次 VRRP 通告    mcast_src_ip 192.168.122.101  # 发送 VRRP 通告的源 IP 地址    nopreempt  # 如果主服务器挂了又恢复，不会抢占虚拟 IP
 
-    authentication {
-        auth_type PASS
-        auth_pass 1111
-    }
+    # 认证配置    authentication {
+        auth_type PASS  # 认证类型为密码认证        auth_pass 1111  # 认证密码    }
 
-    virtual_ipaddress {
-        192.168.122.100
+    # 虚拟 IP 地址配置    virtual_ipaddress {
+        192.168.122.100  # 虚拟 IP 地址，主服务器会持有这个 IP
     }
 }
 ```
@@ -2105,7 +2097,7 @@ server {
 
 ### 15.2 准备资源配置文件
 
-我们通过部署tomcat来演示一个应用在k8s部署的流程
+我们通过部署 nginx 来演示一个应用在k8s部署的流程
 
 #### 15.2.1 声明deployment
 

@@ -1041,31 +1041,23 @@ fi
 <p>以上的操作就准备好keepalived的基础环境了，接下来我们使用<code>k8s-101</code>这台主机作为主节点，使用<code>k8s-102</code>作为重节点，进行以下配置</p>
 <p><code>k8s-101</code>作为主节点，修改<code>/etc/keepalived/keepalived.conf</code>配置文件如下</p>
 <pre><code language="language-shell" class="language-shell">! Configuration File for keepalived
-global_defs {
-   router_id 192.168.122.101
 
-vrrp_script check_nginx {
-    script &#34;/etc/keepalived/check_port.sh 7443&#34;
-    interval 2
-    weight -20
+# 全局配置global_defs {
+   router_id 192.168.122.101  # 当前服务器的唯一标识，通常用 IP 地址或主机名}
+
+# 定义健康检查脚本vrrp_script check_nginx {
+    script &#34;/etc/keepalived/check_port.sh 7443&#34;  # 检查端口 7443 是否在监听的脚本    interval 2  # 每隔 2 秒执行一次脚本    weight -20  # 如果脚本检查失败，当前服务器的优先级降低 20
 }
 
-vrrp_instance VI_1 {
-    state MASTER
-    interface enp1s0
-    virtual_router_id 251
-    priority 100
-    advert_int 1
-    mcast_src_ip 192.168.122.101
-    nopreempt
+# 定义一个 VRRP 实例vrrp_instance VI_1 {
+    state MASTER  # 当前服务器的初始状态是 MASTER（主服务器）    interface enp1s0  # 绑定虚拟 IP 的网络接口    virtual_router_id 251  # VRRP 实例的唯一 ID，范围是 1-255
+    priority 100  # 当前服务器的优先级，数值越大优先级越高    advert_int 1  # 每隔 1 秒发送一次 VRRP 通告    mcast_src_ip 192.168.122.101  # 发送 VRRP 通告的源 IP 地址    nopreempt  # 如果主服务器挂了又恢复，不会抢占虚拟 IP
 
-    authentication {
-        auth_type PASS
-        auth_pass 1111
-    }
+    # 认证配置    authentication {
+        auth_type PASS  # 认证类型为密码认证        auth_pass 1111  # 认证密码    }
 
-    virtual_ipaddress {
-        192.168.122.100
+    # 虚拟 IP 地址配置    virtual_ipaddress {
+        192.168.122.100  # 虚拟 IP 地址，主服务器会持有这个 IP
     }
 }
 </code></pre>
@@ -1839,7 +1831,7 @@ server {
 </ul>
 <p>在下文，我们使用声明式的管理方式（通常指通过yaml配置文件来管理集群）来创建各个集群资源，完成应用部署。</p>
 <h2 is-upgraded>15.2 准备资源配置文件</h2>
-<p>我们通过部署tomcat来演示一个应用在k8s部署的流程</p>
+<p>我们通过部署 nginx 来演示一个应用在k8s部署的流程</p>
 <h3 is-upgraded>15.2.1 声明deployment</h3>
 <p>创建<code>whoami.yml</code>文件，添加以下内容</p>
 <pre><code language="language-yaml" class="language-yaml">kind: Deployment
