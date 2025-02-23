@@ -2182,6 +2182,6 @@ kubectl apply -f whoami.yml \
               -f whoami-ingress.yml
 ```
 
-执行以上命令之后，k8s将会拉取tomcat的镜像，并按我们指定的配置去启动服务。
+执行以上命令之后，k8s将会拉取 nginx 的镜像，并按我们指定的配置去启动服务。
 
 启动完成之后，我们在自己的桌面操作系统的电脑上将`nginx.algs.tech`域名解析到在前面通过 `keepalived` 创建的虚拟IP `192.168.122.100`，再使用浏览器访问域名，就顺利访问到了nginx的首页了。
