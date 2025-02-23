@@ -10,19 +10,19 @@ Feedback Link: <https://github.com/webtechwiki/codelabs/issues>
 
 ## 基础环境准备
 
-### 1.1 kubernetes集群包含的组件
+### 1.1 kubernetes集群组件概述
 
-Kubernetes 集群由 **Master 节点（控制平面）**和 **Node 节点（工作节点）**组成，各自包含以下核心组件：
+Kubernetes 集群由 Master 节点（控制节点）和 Node 节点（工作节点）组成，各自包含以下核心组件：
 
-#### 1.1.1 Master节点组件
+#### 1.1.1 Master节点
 
-1. **API Server（kube-apiserver）**  
-   - 集群的入口，提供 REST API，处理所有操作请求（如创建、更新、删除资源）。  
-   - 负责与其他组件通信（如 `kubelet`、`kube-scheduler` 等）。
-
-2. **etcd**  
+1. **etcd**  
    - 分布式键值存储数据库，保存集群的所有状态和配置数据（如 Pod、Service、Namespace 等）。  
    - 是 Kubernetes 的“唯一真实数据源”（Single Source of Truth）。
+
+2. **API Server（kube-apiserver）**  
+   - 集群的入口，提供 REST API，处理所有操作请求（如创建、更新、删除资源）。  
+   - 负责与其他组件通信（如 kubelet、kube-scheduler 等）。
 
 3. **Scheduler（kube-scheduler）**  
    - 监听未调度的 Pod，根据资源需求、节点负载等因素，将 Pod 分配到合适的 Node 上运行。
@@ -57,28 +57,27 @@ Kubernetes 集群由 **Master 节点（控制平面）**和 **Node 节点（工�
 
 ### 1.2 集群主机规划
 
-所有机器的CPU都是x86的64位架构，并且安装了`Debian GNU/Linux 12 (bookworm)`。各个主机配置如下
+假设我们只有3台主机，为了兼顾硬件条件限制而搭建高可用集群，以下是较为合理的集群软硬件规划：
 
-|  主机   |       IP        |            操作系统            |              配置               |
-| ------- | --------------- | ------------------------------ | ------------------------------- |
-| k8s-101 | 192.168.122.101 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
-| k8s-102 | 192.168.122.102 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
-| k8s-103 | 192.168.122.103 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
+| 节点名称 |       IP        |            操作系统            |              配置               |
+| -------- | --------------- | ------------------------------ | ------------------------------- |
+| k8s-101  | 192.168.122.101 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
+| k8s-102  | 192.168.122.102 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
+| k8s-103  | 192.168.122.103 | Debian GNU/Linux 12 (bookworm) | 内存:4G + SSD硬盘:30G + CPU:2核 |
 
 这三台主机在集群中分别充当的角色如下：
 
-- `k8s-101`: etcd服务器、控制节点、Proxy的L4、L7代理。
+| 节点名称 | etcd服务器 | 控制节点 | 工作节点 | L4/L7代理 |          额外角色          |
+| -------- | ---------- | -------- | -------- | --------- | -------------------------- |
+| k8s-101  | &#10003;   | &#10003; | &#10005; | &#10003;  | 签发证书节点、主要控制节点 |
+| k8s-102  | &#10003;   | &#10003; | &#10003; | &#10003;  |                            |
+| k8s-103  | &#10003;   | &#10003; | &#10003; | &#10005;  |                            |
 
-同时作为运维主机，一些额外的服务由该主机提供，如：签发证书、dns服务、Docker的私有仓库服务、k8s资源配置清单仓库服务、共享存储（NFS）服务等。不过这些额外服务在需要的时候再安装，现在只是这么规划
-
-- `k8s-102`: etcd服务器、控制节点、工作节点、Proxy的L4、L7代理
-- `k8s-102`: etcd服务器、控制节点、工作节点
-
-以上是在资源有限的情况下做的高可用资源分配，其实就是把其群的各个组件合理分配到这3台主机上。如果你的服务器资源充足，应当将各个服务分别独立部署到更多主机上，这样更加合理。
+以上是在资源有限的情况下做的高可用资源分配，搭建集群的过程，其实就是把集群的各个软件组件合理安装到不同主机上，并且保证各个组件能正常工作。如果你的服务器资源充足，应当将组件独立部署到更多主机上，达到增强性能、可用性、可扩展性的目标，简化维护并增强安全性。
 
 ### 1.3 设置hostsname
 
-在 `192.168.122.101` 执行以下命令
+在 192.168.122.101 执行以下命令
 
 ```bash
 hostnamectl set-hostname k8s-101
@@ -107,13 +106,7 @@ EOF
 
 ### 1.4 关闭交换分区
 
-ubernetes 默认不支持在启用交换分区的情况下运行，可以使用以下命令临时关闭交换分区
-
-```bash
-swapoff -a
-```
-
-如果你希望永久禁用交换分区，可以编辑 `/etc/fstab` 文件，注释掉或删除与交换分区相关的行。然后运行以下命令确保交换分区被禁用：
+kubernetes 默认不支持在启用交换分区的情况下运行，可以编辑 `/etc/fstab` 文件，注释掉或删除与交换分区相关的行。然后运行以下命令确保交换分区被禁用：
 
 ```bash
 swapoff -a
@@ -121,14 +114,16 @@ swapoff -a
 
 ## 安装containerd
 
-containerd的下载网址为<https://containerd.io/downloads/>，在撰写文章时（2025.02.15）最新版本是`v2.0.2`，安装到三台机器作为容器运行时环境，分别执行以下操作
+containerd 的下载网址为<https://containerd.io/downloads/>，在撰写文章时（2025.02.15）最新版本是 v2.0.2，我们将其安装到所有主机上，并作为容器运行时环境，安装步骤如下
 
 ### 2.1 安装 containerd
 
 从 <https://github.com/containerd/containerd/releases> 下载 `containerd-<版本>-<操作系统>-<架构>.tar.gz` 存档，验证其 sha256sum，并将其解压到 `/usr/local` 目录下
 
 ```shell
+# 下载并解压
 tar Cxzvf /usr/local containerd-2.0.2-linux-amd64.tar.gz
+# 创建并配置 containerd.service
 mkdir -p /usr/local/lib/systemd/system/
 cat > /usr/local/lib/systemd/system/containerd.service <<EOF
 [Unit]
@@ -159,27 +154,28 @@ OOMScoreAdjust=-999
 [Install]
 WantedBy=multi-user.target
 EOF
+# 重新加载 systemd
 systemctl daemon-reload
+# 启动并启用 containerd 开机启动
 systemctl enable --now containerd
 ```
 
 ### 2.2 安装 runc
 
-runc 是一个轻量级的容器运行时工具，负责根据 OCI（Open Container Initiative）规范创建和运行容器。containerd 依赖 runc 来实际启动和管理容器。
+runc 是一个轻量级的容器运行时工具，负责根据 OCI（Open Container Initiative） 规范创建和运行容器。containerd 依赖 runc 来实际启动和管理容器。
 
 从 <https://github.com/opencontainers/runc/releases> 下载 `runc.<架构>` 二进制文件，验证其 `sha256sum`，并将其安装为 `/usr/local/sbin/runc`。
 
 ```shell
+# 安装
 install -m 755 runc.amd64 /usr/local/sbin/runc
 ```
 
-该二进制文件是静态构建的，应该适用于任何 Linux 发行版。
+该二进制文件是静态构建的，应该适用于任何对应架构的 `Linux` 发行版。
 
 ### 2.3 安装 CNI 插件
 
-CNI（Container Network Interface）插件用于配置容器的网络，包括分配 IP 地址、设置网络接口、配置路由等。通常需要安装，除非明确不需要网络功能。
-
-从 <https://github.com/containernetworking/plugins/releases> 下载 `cni-plugins-<操作系统>-<架构>-<版本>.tgz` 存档，验证其 `sha256sum`，并将其解压到 `/opt/cni/bin` 目录下：
+CNI（Container Network Interface） 插件用于配置容器的网络，包括分配 IP 地址、设置网络接口、配置路由等。从 <https://github.com/containernetworking/plugins/releases> 下载 `cni-plugins-<操作系统>-<架构>-<版本>.tgz` 存档，验证其 `sha256sum`，并将其解压到 `/opt/cni/bin` 目录下，操作过程如下
 
 ```shell
 mkdir -p /opt/cni/bin
@@ -193,7 +189,7 @@ echo 'export PATH=$PATH:/opt/cni/bin' >> /etc/profile
 source /etc/profile
 ```
 
-创建 CNI 配置文件目录
+创建 `CNI` 配置文件目录
 
 ```shell
 mkdir -p /etc/cni/net.d
@@ -216,17 +212,17 @@ cat > /etc/cni/net.d/10-mynet.conf <<EOF
 EOF
 ```
 
-重启 containerd
+重启 `containerd`
 
 ```shell
 systemctl restart containerd
 ```
 
-这些二进制文件是静态构建的，应该适用于任何 Linux 发行版。
+这些二进制文件是静态构建的，应该适用于任何对应架构的 `Linux` 发行版。
 
 ### 2.4 使用命令行工具
 
-`containerd` 是一个强大的容器运行时，但它本身是一个守护进程，需要通过命令行工具（CLI）来交互。不同的 CLI 工具（如 `ctr`、`nerdctl`、`crictl`）是为了满足不同用户和场景的需求而设计的。以下是它们的区别和适用场景：
+`containerd` 是一个强大的容器运行时，但它本身是一个守护进程，需要通过命令行工具（`CLI`）来交互。不同的 `CLI` 工具（如 `ctr`、`nerdctl`、`crictl`）是为了满足不同用户和场景的需求而设计的。以下是它们的区别和适用场景：
 
 |   工具    |           目标用户            |                                功能特点                                 |             适用场景             |
 | --------- | ----------------------------- | ----------------------------------------------------------------------- | -------------------------------- |
@@ -234,7 +230,7 @@ systemctl restart containerd
 | `nerdctl` | 普通用户和运维人员            | 类似 Docker 的体验，功能丰富                                            | 日常容器管理、生产环境           |
 | `crictl`  | Kubernetes 管理员和开发者     | 针对 CRI 设计，适合 Kubernetes 环境                                     | 调试 Kubernetes 节点和容器运行时 |
 
-在这里，我们额外安装 `nerdctl` 工具，以方便后续操作。在 <https://github.com/containerd/nerdctl/releases> 下载对应的操作系统版本，在撰写这边文章时 `nerdctl` 的版本是 `v2.0.3`，安装命令如下
+在这里，`nerdctl` 工具更适合我们的使用场景，因此选择 `nerdctl`。在 <https://github.com/containerd/nerdctl/releases> 下载对应的操作系统版本，在撰写这本文时 `nerdctl` 的版本是 `v2.0.3`，安装命令如下
 
 ```shell
 wget https://github.com/containerd/nerdctl/releases/download/v2.0.3/nerdctl-2.0.3-linux-amd64.tar.gz
@@ -249,14 +245,13 @@ cat >> /etc/profile <<EOF
 source <(nerdctl completion bash)
 export CONTAINERD_NAMESPACE=k8s.io
 EOF
-
 # 让配置立即生效
 source /etc/profile
 ```
 
 ### 2.5 配置 containerd
 
-containerd默认配置文件在 `/etc/containerd/config.toml`，通过运行以下命令生成一个默认配置文件：
+`containerd` 默认配置文件在 `/etc/containerd/config.toml`，通过运行以下命令生成一个默认配置文件：
 
 ```shell
 mkdir -p /etc/containerd
@@ -273,7 +268,7 @@ systemctl restart containerd
 
 ### 3.1 安装证书工具
 
-`cfssl` 系列工具是 Cloudflare 提供的 PKI/TLS 工具，用于证书管理。可以在 <https://github.com/cloudflare/cfssl> 找到对应的信息，在撰写文章时版本是 `1.6.6`，我们下载对应操作系统的版本，安装到 `k8s-101` 这台主机，以 linux amd64 为例安装命令如下
+`cfssl` 系列工具是 `Cloudflare` 提供的 `PKI/TLS` 工具，用于证书管理。可以在 <https://github.com/cloudflare/cfssl> 找到对应的信息，在撰写文章时版本是 `1.6.6`，我们下载对应操作系统的版本，安装到 `k8s-101` 这台主机，以 linux amd64 为例安装命令如下
 
 ```shell
 wget https://github.com/cloudflare/cfssl/releases/download/v1.6.5/cfssl_1.6.5_linux_amd64 -o /usr/local/bin/cfssl
@@ -282,15 +277,17 @@ wget https://github.com/cloudflare/cfssl/releases/download/v1.6.5/cfssl-certinfo
 chmod a+x /usr/local/bin/cfssl*
 ```
 
-以下是它们的简要功能：
+以下是它们的简要功能
 
-- **cfssl**：核心工具，用于证书生成和管理。
-- **cfssl-json**：辅助工具，用于解析 JSON 输出。
-- **cfssl-certinfo**：用于查看证书详细信息。
+|      工具      |             功能             |
+| -------------- | ---------------------------- |
+| cfssl          | 核心工具，用于证书生成和管理 |
+| cfssl-json     | 辅助工具，用于解析 JSON 输出 |
+| cfssl-certinfo | 用于查看证书详细信息         |
 
 ### 3.2 k8s所需证书概述
 
-在Kubernetes集群中，我们需要为集群中的各个组件生成证书，以实现安全通信和身份验证。下图展示了Kubernetes所需的主要证书
+在 `Kubernetes` 集群中，我们需要为集群中的各个组件生成证书，以实现安全通信和身份验证。下图展示了 `Kubernetes` 所需的主要证书
 
 ![k8s证书](assets/202502/k8s_pki.png)
 
@@ -298,9 +295,9 @@ chmod a+x /usr/local/bin/cfssl*
 
 ### 3.3 搭建CA
 
-CA是证书的签发机构，签发证书的前提是有一个签发机构，下文我们搭建自己的签发机构。
+`CA` 是证书的签发机构的简称，所有子证书的签发证书的前提是有一个签发机构，下文我们搭建自己的签发机构。
 
-使用以下命令生成CA配置
+使用以下命令生成 `CA` 配置
 
 ```shell
 mkdir -p /etc/kubernetes/pki
@@ -352,21 +349,20 @@ cat > /etc/kubernetes/pki/ca-csr.json <<EOF
 EOF
 ```
 
-证书根字段
+证书根字段备注如下
 
-- `CN`：证书名称
-- `key`：定义证书类型，algo为加密类型，size为加密长度
-
-`names` 定义证书的通用名称，可以有多个条目
-
-- `CN`: Common Name，一般使用域名
-- `C`: Country Code，申请单位所属国家，只能是两个字母的国家码。例如，中国只能是CN。
-- `ST`: State or Province，省份名称或自治区名称
-- `L`: Locality，城市或自治州名
-- `O`: Organization name，组织名称、公司名称
-- `OU`: Organization Unit Name，组织单位名称、公司部门
-
-`ca.expiry` 代表有效时间，175200h代表20年。
+|    字段     |                          描述                          |      示例或说明       |
+| ----------- | ------------------------------------------------------ | --------------------- |
+| `CN`        | 证书名称（Common Name），一般使用域名                  | example.com           |
+| `key`       | 定义证书类型，`algo` 为加密类型，`size` 为加密长度     | algo: RSA, size: 2048 |
+| `names`     | 定义证书的通用名称，可以有多个条目                     |                       |
+| `CN`        | Common Name，一般使用域名                              | example.com           |
+| `C`         | Country Code，申请单位所属国家，只能是两个字母的国家码 | CN（中国）            |
+| `ST`        | State or Province，省份名称或自治区名称                | Beijing               |
+| `L`         | Locality，城市或自治州名                               | Beijing               |
+| `O`         | Organization name，组织名称、公司名称                  | Example Inc.          |
+| `OU`        | Organization Unit Name，组织单位名称、公司部门         | IT Department         |
+| `ca.expiry` | 代表有效时间，175200h 对应 20 年                       | 175200h               |
 
 最后使用以下命令生成CA自签名根证书
 
@@ -380,7 +376,7 @@ cfssl gencert -initca ca-csr.json | cfssljson -bare ca
 - `ca.pem`: ca公钥证书
 - `ca-key.pem`: ca私钥证书
 
-生成的三个文件是根证书包含的内容。后续，我们给各个服务颁发证书的时候，都基于CA根证书来颁发。
+生成的三个文件是根证书包含的内容。后续，我们给各个服务颁发证书的时候，都基于 `CA` 根证书来颁发。
 
 ### 3.4 签发证书
 
@@ -413,7 +409,7 @@ cat > /etc/kubernetes/pki/etcd-csr.json <<EOF
 EOF
 ```
 
-支持的主机列表对应本机以及所有 etcd 节点。使用以下命令生成证书
+支持的主机列表对应本机以及所有 `etcd` 节点。使用以下命令生成证书
 
 ```shell
 cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www etcd-csr.json | cfssljson -bare etcd
@@ -421,7 +417,7 @@ cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www 
 
 - kube-apiserver
 
-k8s的其他组件跟 apiserver 要进行双向TLS（mTLS）认证，所以 apiserver 需要有自己的证书，以下定义证书申请文件
+`k8s` 的其他组件跟 `apiserver` 要进行双向 `TLS（mTLS）` 认证，所以 `apiserver` 需要有自己的证书，以下定义证书申请文件
 
 ```shell
 cat > /etc/kubernetes/pki/apiserver-csr.json <<EOF
@@ -455,7 +451,7 @@ cat > /etc/kubernetes/pki/apiserver-csr.json <<EOF
 EOF
 ```
 
-该证书后续被 kubernetes master 集群使用，需要将 master 节点的 IP 都填上，同时还需要填写 service 网络的第一个IP（后续计划使用`10.96.0.0 255.255.0.0` 网段作为service网络，因此加上 `10.96.0.1`），后续可能加到集群里的IP也需要都填写上去。最后使用以下命令生成证书
+该证书后续被 `kubernetes master` 集群使用，需要将 `master` 节点的 IP 都填上，同时还需要填写 `service` 网络的第一个IP（后续计划使用`10.96.0.0 255.255.0.0` 网段作为 `service` 网络，因此加上 `10.96.0.1`），后续可能加到集群里的IP也需要都填写上去。最后使用以下命令生成证书
 
 ```shell
 cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www apiserver-csr.json | cfssljson -bare apiserver
@@ -463,7 +459,7 @@ cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www 
 
 -- kube-controller-manager
 
-controller-manager需要跟apiserver进行mTLS认证，定义证书申请文件如下
+`controller-manager` 需要跟 `apiserver` 进行 `mTLS` 认证，定义证书申请文件如下
 
 ```shell
 cat > /etc/kubernetes/pki/controller-manager-csr.json <<EOF
@@ -493,7 +489,7 @@ cat > /etc/kubernetes/pki/controller-manager-csr.json <<EOF
 EOF
 ```
 
-hosts 列表包含所有 kube-controller-manager 节点 IP；CN 为 system:kube-controller-manager，O 为 system:kube-controller-manager，k8s里内置的ClusterRoleBindings system:kube-controller-manager 授权 kube-controller-manager所需的权限。后面组件证书都做类似操作。生成证书命令如下
+`hosts` 列表包含所有 `kube-controller-manager` 节点 IP；CN 为 `system:kube-controller-manager`，O 为 `system:kube-controller-manager`，k8s里内置的`ClusterRoleBindings system:kube-controller-manager` 授权 `kube-controller-manager` 所需的权限。后面组件证书都做类似操作。生成证书命令如下
 
 ```shell
 cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www controller-manager-csr.json | cfssljson -bare controller-manager
@@ -501,7 +497,7 @@ cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www 
 
 - kube-scheduler
 
-kube-scheduler需要跟apiserver进行mTLS认证，生成证书申请文件如下
+`kube-scheduler` 需要跟 `apiserver` 进行 `mTLS` 认证，生成证书申请文件如下
 
 ```shell
 cat > /etc/kubernetes/pki/scheduler-csr.json <<EOF
@@ -531,7 +527,7 @@ cat > /etc/kubernetes/pki/scheduler-csr.json <<EOF
 EOF
 ```
 
-kubernetes内置的ClusterRoleBindings system:kube-scheduler将授权kube-scheduler所需的权限。生成证书命令如下
+`kubernetes` 内置的 `ClusterRoleBindings system:kube-scheduler` 将授权 `kube-scheduler` 所需的权限。生成证书命令如下
 
 ```shell
 cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www scheduler-csr.json | cfssljson -bare scheduler
@@ -539,7 +535,7 @@ cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www 
 
 - kube-proxy
 
-kube-proxy需要跟apiserver进行mTLS认证，生成证书申请请求文件如下
+`kube-proxy` 需要跟 `apiserver` 进行 mTLS 认证，生成证书申请请求文件如下
 
 ```shell
 cat > /etc/kubernetes/pki/proxy-csr.json <<EOF
@@ -605,7 +601,7 @@ cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=www 
 
 ## 安装etcd
 
-我们将使用`k8s-101`、`k8s-102`、`k8s-103`这三台主机搭建ectd集群。在撰写此文档时（2425.02.18），etcd最新稳定版本是 `3.5.18`，可以从 <https://github.com/etcd-io/etcd/releases/> 这个链接下载对应的安装包。
+我们将使用 `k8s-101`、`k8s-102`、`k8s-103` 这三台主机搭建ectd集群。在撰写此文档时（2425.02.18），etcd最新稳定版本是 `3.5.18`，可以从 <https://github.com/etcd-io/etcd/releases/> 这个链接下载对应的安装包。
 
 ### 4.1 etcd启动参数
 
@@ -774,13 +770,13 @@ etcdctl --cacert="/etc/kubernetes/pki/ca.pem" --cert="/etc/kubernetes/pki/etcd.p
 如果看到如下输出，代表 ectd 集群搭建成功
 
 ```bash
-+----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
-|          ENDPOINT          |        ID        | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |
-+----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
-| https://192.168.122.101:2379 | c8815bb4b21730b3 |   3.5.18 |  311 kB |      true |      false |         3 |      37628 |              37628 |        |
-| https://192.168.122.102:2379 | f30299e8a0b43b4d |   3.5.18 |  311 kB |     false |      false |         3 |      37628 |              37628 |        |
-| https://192.168.122.103:2379 | 61c90f737ccf2682 |   3.5.18 |  311 kB |     false |      false |         3 |      37628 |              37628 |        |
-+----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
++------------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+| ENDPOINT                     | ID               | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |
++------------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+| https://192.168.122.101:2379 | c8815bb4b21730b3 | 3.5.18  | 311 kB  | true      | false      | 3         | 37628      | 37628              |        |
+| https://192.168.122.102:2379 | f30299e8a0b43b4d | 3.5.18  | 311 kB  | false     | false      | 3         | 37628      | 37628              |        |
+| https://192.168.122.103:2379 | 61c90f737ccf2682 | 3.5.18  | 311 kB  | false     | false      | 3         | 37628      | 37628              |        |
++------------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
 ```
 
 为了验证etcd集群是否正常工作，我们还可以现在`k8s-101`设置一个值，如下
